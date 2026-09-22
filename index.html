@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Battery Teardown Tracker</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<header class="app-header">
+  <div class="app-title">
+    <h1>Battery Teardown Tracker</h1>
+    <span class="sub">배터리 셀 Tear Down 분석 기록 · 이 브라우저에 저장 (기기 간 공유 안 됨)</span>
+  </div>
+  <span class="live-badge connecting" id="liveBadge"><span class="dot"></span><span id="liveBadgeText">불러오는 중</span></span>
+</header>
+
+<div class="stats-row" id="statsRow">
+  <span class="stat-total" id="statTotal">레코드 0건</span>
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <input type="search" id="searchInput" placeholder="Cell ID 검색..." />
+  </div>
+  <div class="toolbar-group filters">
+    <select id="filterLot"><option value="">LOT (전체)</option></select>
+    <select id="filterGrade"><option value="">Grade (전체)</option></select>
+    <select id="filterOperator"><option value="">Operator (전체)</option></select>
+    <select id="filterStatus"><option value="">TD Status (전체)</option></select>
+    <input type="text" id="filterDate" placeholder="TD Date 포함 검색" />
+    <button id="clearFiltersBtn" class="btn btn-ghost">필터 초기화</button>
+  </div>
+  <div class="toolbar-group actions">
+    <button id="newRecordBtn" class="btn btn-primary">+ 신규 등록</button>
+    <button id="addRowBtn" class="btn btn-secondary">+ 빈 행 추가</button>
+    <label class="btn btn-secondary file-btn">
+      가져오기(CSV/Excel)
+      <input type="file" id="importInput" accept=".csv,.xlsx,.xls" hidden />
+    </label>
+    <button id="exportCsvBtn" class="btn btn-secondary">CSV 내보내기</button>
+    <button id="exportXlsxBtn" class="btn btn-secondary">Excel 내보내기</button>
+  </div>
+</div>
+
+<div class="table-scroll-wrap">
+  <table id="mainTable" class="main-table">
+    <thead><tr id="tableHeadRow"></tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="loading-state" id="loadingState">데이터를 불러오는 중입니다…</div>
+  <div class="empty-state" id="emptyState" hidden>등록된 레코드가 없습니다. "신규 등록"으로 첫 셀을 추가하세요.</div>
+</div>
+
+<!-- Record Form Modal -->
+<div class="modal-overlay" id="formModalOverlay">
+  <div class="modal modal-form">
+    <div class="modal-header">
+      <h2 id="formModalTitle">신규 셀 등록</h2>
+      <button class="modal-close" id="formModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="formModalBody"></div>
+    <div class="modal-footer">
+      <span class="dup-warning" id="dupWarning"></span>
+      <button class="btn btn-ghost" id="formCancelBtn">취소</button>
+      <button class="btn btn-primary" id="formSaveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail View Modal -->
+<div class="modal-overlay" id="detailModalOverlay">
+  <div class="modal modal-detail">
+    <div class="modal-header">
+      <h2 id="detailModalTitle">상세 정보</h2>
+      <button class="modal-close" id="detailModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="detailModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="detailDeleteBtn">행 삭제</button>
+      <button class="btn btn-ghost" id="detailCloseBtn">닫기</button>
+      <button class="btn btn-primary" id="detailEditBtn">전체 편집</button>
+    </div>
+  </div>
+</div>
+
+<!-- Image Lightbox -->
+<div class="modal-overlay" id="lightboxOverlay">
+  <div class="lightbox">
+    <button class="modal-close lightbox-close" id="lightboxClose">&times;</button>
+    <button class="lightbox-nav lightbox-prev" id="lightboxPrev">&#8249;</button>
+    <img id="lightboxImg" src="" alt="" />
+    <button class="lightbox-nav lightbox-next" id="lightboxNext">&#8250;</button>
+    <div class="lightbox-caption" id="lightboxCaption"></div>
+  </div>
+</div>
+
+<!-- TD Date Year Confirmation Modal -->
+<div class="modal-overlay" id="yearModalOverlay">
+  <div class="modal modal-import">
+    <div class="modal-header">
+      <h2>TD Date 연도 확인</h2>
+      <button class="modal-close" id="yearModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="yearModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="yearCancelBtn">취소</button>
+      <button class="btn btn-primary" id="yearConfirmBtn">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Review Modal -->
+<div class="modal-overlay" id="importModalOverlay">
+  <div class="modal modal-import">
+    <div class="modal-header">
+      <h2>가져오기 검토</h2>
+      <button class="modal-close" id="importModalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="importModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="importCancelBtn">취소</button>
+      <button class="btn btn-primary" id="importConfirmBtn">가져오기 확정</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
