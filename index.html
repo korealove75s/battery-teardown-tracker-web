@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Battery Teardown Tracker</title>
-<link rel="stylesheet" href="styles.css?v=3" />
+<link rel="stylesheet" href="styles.css?v=4" />
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -20,6 +20,7 @@
 
 <div class="stats-row" id="statsRow">
   <span class="stat-total" id="statTotal">레코드 0건</span>
+  <span class="paste-hint">📋 엑셀 붙여넣기: 채울 첫 칸 클릭 후 Ctrl+V · 표 바깥에서 Ctrl+V 하면 맨 아래에 새 행으로 추가 · 헤더 행까지 복사하면 열 이름으로 자동 매칭</span>
 </div>
 
 <div class="toolbar">
@@ -33,6 +34,7 @@
   </div>
   <div class="toolbar-group actions">
     <button id="newRecordBtn" class="btn btn-primary">+ 신규 등록</button>
+    <input type="number" id="addRowCount" value="1" min="1" max="1000" title="추가할 빈 행 수" style="width:64px" />
     <button id="addRowBtn" class="btn btn-secondary">+ 빈 행 추가</button>
     <label class="btn btn-secondary file-btn">
       가져오기(CSV/Excel)
@@ -127,6 +129,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

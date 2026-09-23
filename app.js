@@ -215,6 +215,29 @@ async function createCell(fields) {
   renderTable();
   return rec.id;
 }
+// Bulk insert in one transaction; createdAt is offset per row so load order matches paste order
+async function createCells(fieldsList) {
+  if (!fieldsList.length) return;
+  const base = Date.now();
+  const recs = fieldsList.map((fields, i) => {
+    const ts = new Date(base + i).toISOString();
+    return Object.assign(emptyFields(), fields, { id: genId(), images: [], createdAt: ts, updatedAt: ts });
+  });
+  const database = await openIdb();
+  await new Promise((resolve, reject) => {
+    const tx = database.transaction(curStore(), 'readwrite');
+    const store = tx.objectStore(curStore());
+    recs.forEach((r) => store.put(r));
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+  state.cells.push(...recs);
+  populateFilterOptions();
+  renderSheetTabs();
+  renderStats();
+  renderTable();
+}
 async function updateCell(id, fields) {
   const cell = state.cells.find((c) => c.id === id);
   if (!cell) return;
@@ -375,7 +398,7 @@ function renderStats() {
     const chip = document.createElement('span');
     chip.className = 'stat-chip';
     chip.innerHTML = `${escapeHtml(status)} <b>${n}</b>`;
-    row.appendChild(chip);
+    row.insertBefore(chip, row.querySelector('.paste-hint'));
   });
 }
 
@@ -553,6 +576,33 @@ async function handleCellChange(e) {
 // ---------------------------------------------------------------------------
 // Paste-from-Excel
 // ---------------------------------------------------------------------------
+// Excel copies as TSV; cells containing tabs/newlines/quotes are wrapped in "..." with "" escapes
+function parseClipboardGrid(text) {
+  const s = String(text).replace(/\r\n?/g, '\n');
+  const rows = [];
+  let row = [], cell = '', i = 0, inQuotes = false;
+  while (i < s.length) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"' && s[i + 1] === '"') { cell += '"'; i += 2; continue; }
+      if (ch === '"' && (i + 1 === s.length || s[i + 1] === '\t' || s[i + 1] === '\n')) { inQuotes = false; i++; continue; }
+      cell += ch; i++; continue;
+    }
+    if (ch === '"' && cell === '') { inQuotes = true; i++; continue; }
+    if (ch === '\t') { row.push(cell); cell = ''; i++; continue; }
+    if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; i++; continue; }
+    cell += ch; i++;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((v) => v.trim() !== ''));
+}
+// If the first copied row is this tab's header row, return a per-column key map
+function detectHeaderKeys(firstRow) {
+  const keys = firstRow.map((h) => HEADER_MAP[normalizeHeader(h)] || null);
+  const nonEmpty = firstRow.filter((h) => h.trim()).length;
+  const matched = keys.filter((k) => k && EDITABLE_KEYS.includes(k)).length;
+  return matched >= 2 && matched * 2 >= nonEmpty ? keys : null;
+}
 async function onTablePaste(e) {
   const target = e.target;
   if (!target.classList || !target.classList.contains('cell-input')) return;
@@ -561,15 +611,15 @@ async function onTablePaste(e) {
   // Multi-line prose pasted into a long-text cell stays in that cell
   if (target.tagName === 'TEXTAREA' && !text.includes('\t')) return;
   e.preventDefault();
-  const lines = text.replace(/\r/g, '').split('\n');
-  if (lines.length && lines[lines.length - 1] === '') lines.pop();
-  const grid = lines.map((line) => line.split('\t'));
+  const grid = parseClipboardGrid(text);
   if (grid.length === 0) return;
   if (grid.length === 1 && grid[0].length === 1) {
     target.value = grid[0][0];
     target.dispatchEvent(new Event('change', { bubbles: true }));
     return;
   }
+  const headerKeys = detectHeaderKeys(grid[0]);
+  if (headerKeys) { await handleGridPaste(grid.slice(1), [], 0, 0, headerKeys); return; }
   const startColIdx = EDITABLE_KEYS.indexOf(target.dataset.field);
   if (startColIdx === -1) return;
   const startRowId = target.closest('tr').dataset.id;
@@ -578,7 +628,21 @@ async function onTablePaste(e) {
   if (startRowIdx === -1) return;
   await handleGridPaste(grid, filteredRows, startRowIdx, startColIdx);
 }
-async function handleGridPaste(grid, filteredRows, startRowIdx, startColIdx) {
+// Ctrl+V outside any cell (e.g. on an empty table): append the rows at the bottom from the first column
+async function onDocumentPaste(e) {
+  if (e.defaultPrevented) return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], .modal-overlay')) return;
+  if (document.querySelector('.modal-overlay.open')) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+  if (!text || (!text.includes('\t') && !text.includes('\n'))) return;
+  e.preventDefault();
+  const grid = parseClipboardGrid(text);
+  if (!grid.length) return;
+  const headerKeys = detectHeaderKeys(grid[0]);
+  await handleGridPaste(headerKeys ? grid.slice(1) : grid, [], 0, 0, headerKeys);
+}
+async function handleGridPaste(grid, filteredRows, startRowIdx, startColIdx, headerKeys) {
+  if (!grid.length) { showToast('붙여넣을 데이터 행이 없습니다.', true); return; }
   const updates = [];
   const creations = [];
   grid.forEach((line, i) => {
@@ -587,9 +651,9 @@ async function handleGridPaste(grid, filteredRows, startRowIdx, startColIdx) {
       ? { existing: true, id: filteredRows[rowIdx].id, fields: {} }
       : { existing: false, fields: {} };
     line.forEach((val, j) => {
-      const colIdx = startColIdx + j;
-      if (colIdx >= EDITABLE_KEYS.length) return;
-      target.fields[EDITABLE_KEYS[colIdx]] = val;
+      const key = headerKeys ? headerKeys[j] : EDITABLE_KEYS[startColIdx + j];
+      if (!key || !EDITABLE_KEYS.includes(key)) return;
+      target.fields[key] = val.trim();
     });
     (target.existing ? updates : creations).push(target);
   });
@@ -610,8 +674,14 @@ async function handleGridPaste(grid, filteredRows, startRowIdx, startColIdx) {
   }
   try {
     for (const u of updates) { await updateCell(u.id, u.fields); }
-    for (const c of creations) { await createCell(c.fields); }
-    showToast(`${grid.length}행 붙여넣기 완료`);
+    if (creations.length) await createCells(creations.map((c) => c.fields));
+    populateFilterOptions();
+    renderStats();
+    renderTable();
+    const parts = [];
+    if (updates.length) parts.push(`기존 ${updates.length}행 채움`);
+    if (creations.length) parts.push(`새 행 ${creations.length}개 추가`);
+    showToast(`붙여넣기 완료 — ${parts.join(', ')}${headerKeys ? ' (엑셀 헤더로 열 자동 매칭)' : ''}`);
   } catch (err) {
     console.error(err);
     showToast('붙여넣기 중 오류가 발생했습니다.', true);
@@ -1047,6 +1117,7 @@ function wireModalClose(overlayId, closeBtnIds) {
 function init() {
   document.getElementById('tableBody').addEventListener('change', handleCellChange);
   document.getElementById('tableBody').addEventListener('paste', onTablePaste, true);
+  document.addEventListener('paste', onDocumentPaste);
   document.getElementById('tableBody').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.classList && e.target.classList.contains('cell-input')) { e.preventDefault(); e.target.blur(); }
   });
@@ -1060,8 +1131,13 @@ function init() {
 
   document.getElementById('newRecordBtn').onclick = () => openFormModal(null);
   document.getElementById('addRowBtn').onclick = async () => {
-    try { await createCell({}); showToast('빈 행이 추가되었습니다.'); }
-    catch (err) { console.error(err); showToast('행 추가 실패', true); }
+    const countEl = document.getElementById('addRowCount');
+    const n = Math.min(1000, Math.max(1, parseInt(countEl.value, 10) || 1));
+    countEl.value = n;
+    try {
+      await createCells(Array.from({ length: n }, () => ({})));
+      showToast(`빈 행 ${n}개가 추가되었습니다. 채울 첫 칸을 클릭하고 Ctrl+V 하세요.`);
+    } catch (err) { console.error(err); showToast('행 추가 실패', true); }
   };
   document.getElementById('formSaveBtn').onclick = saveFormModal;
   wireModalClose('formModalOverlay', ['formModalClose', 'formCancelBtn']);
