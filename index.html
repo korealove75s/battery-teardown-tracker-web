@@ -16,6 +16,8 @@
   <span class="live-badge connecting" id="liveBadge"><span class="dot"></span><span id="liveBadgeText">불러오는 중</span></span>
 </header>
 
+<nav class="sheet-tabs" id="sheetTabs"></nav>
+
 <div class="stats-row" id="statsRow">
   <span class="stat-total" id="statTotal">레코드 0건</span>
 </div>
@@ -25,10 +27,7 @@
     <input type="search" id="searchInput" placeholder="Cell ID 검색..." />
   </div>
   <div class="toolbar-group filters">
-    <select id="filterLot"><option value="">LOT (전체)</option></select>
-    <select id="filterGrade"><option value="">Grade (전체)</option></select>
-    <select id="filterOperator"><option value="">Operator (전체)</option></select>
-    <select id="filterStatus"><option value="">TD Status (전체)</option></select>
+    <span class="toolbar-group" id="filterSelects"></span>
     <input type="text" id="filterDate" placeholder="TD Date 포함 검색" />
     <button id="clearFiltersBtn" class="btn btn-ghost">필터 초기화</button>
   </div>

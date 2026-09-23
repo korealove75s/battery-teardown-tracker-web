@@ -1,9 +1,9 @@
 'use strict';
 
 // ---------------------------------------------------------------------------
-// Column definitions (spec order)
+// Sheet (tab) definitions — each tab is its own IndexedDB object store
 // ---------------------------------------------------------------------------
-const COLUMNS = [
+const TEARDOWN_COLUMNS = [
   { key: 'lot', label: 'LOT', type: 'text', sticky: 1 },
   { key: 'grade', label: 'Grade', type: 'text' },
   { key: 'count', label: 'Count', type: 'text' },
@@ -23,14 +23,66 @@ const COLUMNS = [
   { key: 'images', label: 'VHX/Image', type: 'image' },
   { key: 'furtherAnalysis', label: 'Further Analysis', type: 'long' },
 ];
-const EDITABLE_KEYS = COLUMNS.filter((c) => c.type !== 'image').map((c) => c.key);
+const ANALYSIS_COLUMNS = [
+  { key: 'lot', label: 'LOT', type: 'text', sticky: 1 },
+  { key: 'cellId', label: 'Cell ID', type: 'text', sticky: 2 },
+  { key: 'grade', label: 'Grade', type: 'text' },
+  { key: 'docv', label: 'dOCV', type: 'text' },
+  { key: 'frozenIr', label: 'Frozen IR Result (35MOhm)', type: 'text' },
+  { key: 'frozenIrPf', label: 'Frozen IR Pass/Fail', type: 'text' },
+  { key: 'voltageDrop', label: 'voltage drop / no drop', type: 'text' },
+  { key: 'droppedLayer', label: 'Voltage Dropped Layer', type: 'text' },
+  { key: 'docvV', label: 'dOCV (V)', type: 'text' },
+  { key: 'spotFound', label: 'Spot Found', type: 'text' },
+  { key: 'topBack', label: 'Top/ Back', type: 'text' },
+  { key: 'x', label: 'x', type: 'text' },
+  { key: 'y', label: 'y', type: 'text' },
+  { key: 'shape', label: 'Shape', type: 'text' },
+  { key: 'semEds', label: 'SEM/EDS Analysis', type: 'long' },
+  { key: 'location', label: 'Location', type: 'text' },
+  { key: 'longSide', label: 'Long side', type: 'text' },
+  { key: 'shortSide', label: 'Short side', type: 'text' },
+  { key: 'height', label: 'Height', type: 'text' },
+];
+const SHEETS = {
+  teardown: {
+    label: 'Tear Down',
+    store: 'cells',
+    columns: TEARDOWN_COLUMNS,
+    filters: [['lot', 'LOT'], ['grade', 'Grade'], ['operator', 'Operator'], ['tdStatus', 'TD Status']],
+    dateKey: 'tdDate',
+    statusKey: 'tdStatus',
+    aliases: { 'OCV': 'ocv', 'ACIR': 'acir', 'TD Status': 'tdStatus', 'TopBack': 'topBack' },
+    exportName: 'battery-teardown-export',
+    sheetName: 'TearDown',
+  },
+  analysis: {
+    label: 'Frozen IR · Spot 분석',
+    store: 'analysis',
+    columns: ANALYSIS_COLUMNS,
+    filters: [['lot', 'LOT'], ['grade', 'Grade'], ['frozenIrPf', 'Frozen IR P/F'], ['voltageDrop', 'Voltage drop'], ['spotFound', 'Spot Found']],
+    dateKey: null,
+    statusKey: 'frozenIrPf',
+    aliases: { 'Frozen IR Result': 'frozenIr', 'Frozen IR': 'frozenIr', 'Frozen IR P/F': 'frozenIrPf', 'Voltage Drop': 'voltageDrop', 'SEM/EDS': 'semEds' },
+    exportName: 'battery-analysis-export',
+    sheetName: 'Analysis',
+  },
+};
+Object.values(SHEETS).forEach((s) => {
+  s.editableKeys = s.columns.filter((c) => c.type !== 'image').map((c) => c.key);
+  s.hasImages = s.columns.some((c) => c.type === 'image');
+  s.headerMap = {};
+  s.columns.forEach((c) => { s.headerMap[normalizeHeader(c.label)] = c.key; });
+  Object.entries(s.aliases).forEach(([h, k]) => { s.headerMap[normalizeHeader(h)] = k; });
+});
 
-const HEADER_MAP = {};
-COLUMNS.forEach((c) => { HEADER_MAP[normalizeHeader(c.label)] = c.key; });
-HEADER_MAP[normalizeHeader('OCV')] = 'ocv';
-HEADER_MAP[normalizeHeader('ACIR')] = 'acir';
-HEADER_MAP[normalizeHeader('TD Status')] = 'tdStatus';
-HEADER_MAP[normalizeHeader('TopBack')] = 'topBack';
+// Active-sheet bindings, reassigned by setActiveSheet()
+let activeSheetKey = 'teardown';
+let SHEET = SHEETS.teardown;
+let COLUMNS = SHEET.columns;
+let EDITABLE_KEYS = SHEET.editableKeys;
+let HEADER_MAP = SHEET.headerMap;
+function curStore() { return SHEET.store; }
 
 function normalizeHeader(h) {
   return String(h || '').toLowerCase().replace(/[\s()./\-\u03a9]/g, '');
@@ -44,8 +96,9 @@ function emptyFields() {
 // ---------------------------------------------------------------------------
 const state = {
   cells: [],
+  data: { teardown: [], analysis: [] },
   loaded: false,
-  filters: { search: '', lot: '', grade: '', operator: '', status: '', date: '' },
+  filters: { search: '', date: '', sel: {} },
   formEditingId: null,
   formImages: [],
   formStagedFiles: [],
@@ -56,7 +109,7 @@ const state = {
 // IndexedDB persistence (per-browser storage — no server, no account needed)
 // ---------------------------------------------------------------------------
 const IDB_NAME = 'battery-teardown-tracker';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2; // v2: added 'analysis' store for the second tab
 let idbPromise = null;
 function openIdb() {
   if (idbPromise) return idbPromise;
@@ -67,9 +120,15 @@ function openIdb() {
       const database = e.target.result;
       if (!database.objectStoreNames.contains('cells')) database.createObjectStore('cells', { keyPath: 'id' });
       if (!database.objectStoreNames.contains('images')) database.createObjectStore('images', { keyPath: 'id' });
+      if (!database.objectStoreNames.contains('analysis')) database.createObjectStore('analysis', { keyPath: 'id' });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const database = req.result;
+      database.onversionchange = () => { database.close(); showToast('새 버전이 다른 탭에서 열렸습니다. 이 페이지를 새로고침해 주세요.', true); };
+      resolve(database);
+    };
     req.onerror = () => reject(req.error);
+    req.onblocked = () => showToast('이 사이트가 열려 있는 다른 탭을 닫거나 새로고침해 주세요 (저장소 업데이트 대기 중).', true);
   });
   return idbPromise;
 }
@@ -133,13 +192,13 @@ function showEmpty(v, msg) {
 }
 
 async function loadCells() {
-  const rows = await idbGetAll('cells');
-  rows.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-  state.cells = rows;
+  for (const [key, sheet] of Object.entries(SHEETS)) {
+    const rows = await idbGetAll(sheet.store);
+    rows.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    state.data[key] = rows;
+  }
   state.loaded = true;
-  populateFilterOptions();
-  renderStats();
-  renderTable();
+  setActiveSheet(activeSheetKey);
   showLoading(false);
 }
 
@@ -149,8 +208,9 @@ async function loadCells() {
 async function createCell(fields) {
   const now = new Date().toISOString();
   const rec = Object.assign(emptyFields(), fields, { id: genId(), images: [], createdAt: now, updatedAt: now });
-  await idbPut('cells', rec);
+  await idbPut(curStore(), rec);
   state.cells.push(rec);
+  renderSheetTabs();
   renderStats();
   renderTable();
   return rec.id;
@@ -159,14 +219,15 @@ async function updateCell(id, fields) {
   const cell = state.cells.find((c) => c.id === id);
   if (!cell) return;
   Object.assign(cell, fields, { updatedAt: new Date().toISOString() });
-  await idbPut('cells', cell);
+  await idbPut(curStore(), cell);
 }
 async function deleteCell(cell) {
   if (cell.images && cell.images.length) {
     for (const img of cell.images) { try { await idbDelete('images', img.id); } catch (err) { console.warn('image delete failed', err); } }
   }
-  await idbDelete('cells', cell.id);
-  state.cells = state.cells.filter((c) => c.id !== cell.id);
+  await idbDelete(curStore(), cell.id);
+  state.cells = state.data[activeSheetKey] = state.cells.filter((c) => c.id !== cell.id);
+  renderSheetTabs();
   renderStats();
   renderTable();
 }
@@ -306,7 +367,7 @@ function renderStats() {
   row.querySelectorAll('.stat-chip').forEach((el) => el.remove());
   const counts = new Map();
   state.cells.forEach((c) => {
-    const v = (c.tdStatus || '').trim();
+    const v = (c[SHEET.statusKey] || '').trim();
     if (!v) return;
     counts.set(v, (counts.get(v) || 0) + 1);
   });
@@ -323,7 +384,7 @@ function renderStats() {
 // ---------------------------------------------------------------------------
 function renderTableHead() {
   const headRow = document.getElementById('tableHeadRow');
-  if (headRow.dataset.built) return;
+  if (headRow.dataset.built === activeSheetKey) return;
   headRow.innerHTML = '';
   COLUMNS.forEach((col) => {
     const th = document.createElement('th');
@@ -335,17 +396,14 @@ function renderTableHead() {
   const th = document.createElement('th');
   th.textContent = 'Actions';
   headRow.appendChild(th);
-  headRow.dataset.built = '1';
+  headRow.dataset.built = activeSheetKey;
 }
 function getFilteredCells() {
   const f = state.filters;
   return state.cells.filter((c) => {
     if (f.search && !(c.cellId || '').toLowerCase().includes(f.search.toLowerCase())) return false;
-    if (f.lot && c.lot !== f.lot) return false;
-    if (f.grade && c.grade !== f.grade) return false;
-    if (f.operator && c.operator !== f.operator) return false;
-    if (f.status && c.tdStatus !== f.status) return false;
-    if (f.date && !(c.tdDate || '').toLowerCase().includes(f.date.toLowerCase())) return false;
+    for (const [key, val] of Object.entries(f.sel)) { if (val && c[key] !== val) return false; }
+    if (SHEET.dateKey && f.date && !(c[SHEET.dateKey] || '').toLowerCase().includes(f.date.toLowerCase())) return false;
     return true;
   });
 }
@@ -380,21 +438,16 @@ function createRowElement(cell, preserve) {
     const td = document.createElement('td');
     if (col.sticky === 1) td.classList.add('col-sticky-1');
     if (col.sticky === 2) td.classList.add('col-sticky-2');
-    if (col.type === 'text') {
-      const input = document.createElement('input');
-      input.type = 'text';
+    if (col.type === 'text' || col.type === 'long') {
+      const input = document.createElement(col.type === 'long' ? 'textarea' : 'input');
+      if (col.type === 'long') { input.rows = 1; input.placeholder = 'Shift+Enter 줄바꿈'; }
+      else input.type = 'text';
       input.className = 'cell-input';
       input.dataset.field = col.key;
       const usePreserved = preserve && preserve.rowId === cell.id && preserve.field === col.key;
       input.value = usePreserved ? preserve.value : (cell[col.key] || '');
       if (col.key === 'cellId' && isDuplicateLocally(cell)) input.classList.add('dup-cell');
       td.appendChild(input);
-    } else if (col.type === 'long') {
-      const span = document.createElement('span');
-      const val = cell[col.key] || '';
-      span.className = 'cell-longtext' + (val ? ' has-content' : '');
-      span.textContent = val ? (val.length > 60 ? val.slice(0, 60) + '…' : val) : '(클릭하여 입력)';
-      td.appendChild(span);
     } else if (col.type === 'image') {
       td.appendChild(renderImagesCell(cell));
     }
@@ -476,6 +529,8 @@ async function handleCellChange(e) {
   cell[field] = value;
   try {
     await updateCell(id, { [field]: value });
+    if (field === SHEET.statusKey) renderStats();
+    if (SHEET.filters.some(([k]) => k === field)) populateFilterOptions();
     if (field === 'cellId') {
       const dup = state.cells.filter((c) => c.id !== cell.id && (c.cellId || '').trim().toLowerCase() === value.trim().toLowerCase() && value.trim());
       if (dup.length) showToast(`⚠ Cell ID 중복: "${value}" — 기존 ${dup.length}건 존재 (LOT: ${dup.map((d) => d.lot || '-').join(', ')})`, true);
@@ -496,6 +551,8 @@ async function onTablePaste(e) {
   if (!target.classList || !target.classList.contains('cell-input')) return;
   const text = (e.clipboardData || window.clipboardData).getData('text/plain');
   if (!text) return;
+  // Multi-line prose pasted into a long-text cell stays in that cell
+  if (target.tagName === 'TEXTAREA' && !text.includes('\t')) return;
   e.preventDefault();
   const lines = text.replace(/\r/g, '').split('\n');
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
@@ -593,6 +650,7 @@ function openDetailModal(cell) {
     grid.appendChild(item);
   });
   body.appendChild(grid);
+  if (SHEET.hasImages) {
   const imgSection = document.createElement('div');
   imgSection.className = 'detail-item full';
   const imgHeader = document.createElement('div'); imgHeader.className = 'k'; imgHeader.textContent = 'VHX/Image';
@@ -612,6 +670,7 @@ function openDetailModal(cell) {
   }
   imgSection.appendChild(imgs);
   body.appendChild(imgSection);
+  }
   document.getElementById('detailModalOverlay').classList.add('open');
 }
 
@@ -653,6 +712,7 @@ function openFormModal(cell) {
   });
   body.appendChild(grid);
 
+  if (SHEET.hasImages) {
   const imgField = document.createElement('div');
   imgField.className = 'form-field full';
   const imgLabel = document.createElement('label'); imgLabel.textContent = 'VHX/Image (이미지 첨부)';
@@ -682,6 +742,7 @@ function openFormModal(cell) {
   imgField.appendChild(addImgBtn);
   body.appendChild(imgField);
   renderFormImageAttachArea();
+  }
 
   updateDupWarning(cell ? cell.cellId : '');
   document.getElementById('formModalOverlay').classList.add('open');
@@ -809,7 +870,7 @@ function showImportReviewModal({ parsed, ignoredHeaders, dupCount, yearItems }) 
     body.innerHTML = '';
     const summary = document.createElement('div');
     summary.className = 'import-summary';
-    summary.innerHTML = `총 <b>${parsed.length}</b>행을 가져옵니다.<br/>${ignoredHeaders.length ? `인식되지 않아 무시된 열: ${escapeHtml(ignoredHeaders.join(', '))}<br/>` : ''}${dupCount ? `<span style="color:var(--warn)">⚠ 기존 데이터와 Cell ID가 중복되는 행: ${dupCount}건 (그래도 추가되며, 가져오기 후 표에서 중복 표시로 확인할 수 있습니다.)</span><br/>` : ''}VHX/Image 열의 실제 이미지 파일은 가져올 수 없어 무시됩니다. 가져온 후 각 행에서 직접 첨부해 주세요.`;
+    summary.innerHTML = `<b>[${escapeHtml(SHEET.label)}]</b> 탭에 총 <b>${parsed.length}</b>행을 가져옵니다.<br/>${ignoredHeaders.length ? `인식되지 않아 무시된 열: ${escapeHtml(ignoredHeaders.join(', '))}<br/>` : ''}${dupCount ? `<span style="color:var(--warn)">⚠ 기존 데이터와 Cell ID가 중복되는 행: ${dupCount}건 (그래도 추가되며, 가져오기 후 표에서 중복 표시로 확인할 수 있습니다.)</span><br/>` : ''}${SHEET.hasImages ? 'VHX/Image 열의 실제 이미지 파일은 가져올 수 없어 무시됩니다. 가져온 후 각 행에서 직접 첨부해 주세요.' : ''}`;
     body.appendChild(summary);
     if (yearItems.length) {
       const yearBox = document.createElement('div');
@@ -898,13 +959,13 @@ function downloadBlob(content, filename, type) {
 function exportCsv() {
   const ws = XLSX.utils.json_to_sheet(buildExportRows(), { header: COLUMNS.map((c) => c.label) });
   const csv = XLSX.utils.sheet_to_csv(ws);
-  downloadBlob(csv, `battery-teardown-export-${dateStamp()}.csv`, 'text/csv;charset=utf-8;');
+  downloadBlob(csv, `${SHEET.exportName}-${dateStamp()}.csv`, 'text/csv;charset=utf-8;');
 }
 function exportXlsx() {
   const ws = XLSX.utils.json_to_sheet(buildExportRows(), { header: COLUMNS.map((c) => c.label) });
   const wbx = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wbx, ws, 'TearDown');
-  XLSX.writeFile(wbx, `battery-teardown-export-${dateStamp()}.xlsx`);
+  XLSX.utils.book_append_sheet(wbx, ws, SHEET.sheetName);
+  XLSX.writeFile(wbx, `${SHEET.exportName}-${dateStamp()}.xlsx`);
 }
 
 // ---------------------------------------------------------------------------
@@ -919,10 +980,53 @@ function fillSelect(sel, values) {
   if (values.includes(current)) sel.value = current;
 }
 function populateFilterOptions() {
-  fillSelect(document.getElementById('filterLot'), uniqueValues('lot'));
-  fillSelect(document.getElementById('filterGrade'), uniqueValues('grade'));
-  fillSelect(document.getElementById('filterOperator'), uniqueValues('operator'));
-  fillSelect(document.getElementById('filterStatus'), uniqueValues('tdStatus'));
+  document.querySelectorAll('#filterSelects select').forEach((sel) => fillSelect(sel, uniqueValues(sel.dataset.key)));
+}
+function buildFilterControls() {
+  const wrap = document.getElementById('filterSelects');
+  wrap.innerHTML = '';
+  SHEET.filters.forEach(([key, label]) => {
+    const sel = document.createElement('select');
+    sel.dataset.key = key;
+    sel.innerHTML = `<option value="">${escapeHtml(label)} (전체)</option>`;
+    sel.onchange = () => { state.filters.sel[key] = sel.value; renderTable(); };
+    wrap.appendChild(sel);
+  });
+  document.getElementById('filterDate').hidden = !SHEET.dateKey;
+}
+
+// ---------------------------------------------------------------------------
+// Sheet tabs
+// ---------------------------------------------------------------------------
+function renderSheetTabs() {
+  const nav = document.getElementById('sheetTabs');
+  nav.innerHTML = '';
+  Object.entries(SHEETS).forEach(([key, sheet]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sheet-tab' + (key === activeSheetKey ? ' active' : '');
+    btn.innerHTML = `${escapeHtml(sheet.label)}<span class="count">${state.loaded ? state.data[key].length : '…'}</span>`;
+    btn.onclick = () => setActiveSheet(key);
+    nav.appendChild(btn);
+  });
+}
+function setActiveSheet(key) {
+  if (!SHEETS[key]) return;
+  activeSheetKey = key;
+  SHEET = SHEETS[key];
+  COLUMNS = SHEET.columns;
+  EDITABLE_KEYS = SHEET.editableKeys;
+  HEADER_MAP = SHEET.headerMap;
+  try { localStorage.setItem('btt.activeSheet', key); } catch (e) {}
+  state.cells = state.data[key];
+  state.filters = { search: '', date: '', sel: {} };
+  document.getElementById('searchInput').value = '';
+  document.getElementById('filterDate').value = '';
+  buildFilterControls();
+  populateFilterOptions();
+  renderSheetTabs();
+  renderStats();
+  renderTable();
 }
 
 // ---------------------------------------------------------------------------
@@ -937,12 +1041,12 @@ function init() {
   document.getElementById('tableBody').addEventListener('change', handleCellChange);
   document.getElementById('tableBody').addEventListener('paste', onTablePaste, true);
   document.getElementById('tableBody').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('cell-input')) { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.classList && e.target.classList.contains('cell-input')) { e.preventDefault(); e.target.blur(); }
   });
   document.getElementById('tableBody').addEventListener('click', (e) => {
     const tr = e.target.closest('tr');
     if (!tr) return;
-    if (e.target.closest('input, button, img')) return;
+    if (e.target.closest('input, textarea, button, img')) return;
     const cell = state.cells.find((c) => c.id === tr.dataset.id);
     if (cell) openDetailModal(cell);
   });
@@ -983,18 +1087,11 @@ function init() {
   });
 
   document.getElementById('searchInput').oninput = debounce((e) => { state.filters.search = e.target.value; renderTable(); }, 200);
-  document.getElementById('filterLot').onchange = (e) => { state.filters.lot = e.target.value; renderTable(); };
-  document.getElementById('filterGrade').onchange = (e) => { state.filters.grade = e.target.value; renderTable(); };
-  document.getElementById('filterOperator').onchange = (e) => { state.filters.operator = e.target.value; renderTable(); };
-  document.getElementById('filterStatus').onchange = (e) => { state.filters.status = e.target.value; renderTable(); };
   document.getElementById('filterDate').oninput = debounce((e) => { state.filters.date = e.target.value; renderTable(); }, 200);
   document.getElementById('clearFiltersBtn').onclick = () => {
-    state.filters = { search: '', lot: '', grade: '', operator: '', status: '', date: '' };
+    state.filters = { search: '', date: '', sel: {} };
     document.getElementById('searchInput').value = '';
-    document.getElementById('filterLot').value = '';
-    document.getElementById('filterGrade').value = '';
-    document.getElementById('filterOperator').value = '';
-    document.getElementById('filterStatus').value = '';
+    document.querySelectorAll('#filterSelects select').forEach((sel) => { sel.value = ''; });
     document.getElementById('filterDate').value = '';
     renderTable();
   };
@@ -1009,7 +1106,9 @@ function init() {
   document.getElementById('exportCsvBtn').onclick = exportCsv;
   document.getElementById('exportXlsxBtn').onclick = exportXlsx;
 
-  renderTableHead();
+  let savedSheet = null;
+  try { savedSheet = localStorage.getItem('btt.activeSheet'); } catch (e) {}
+  setActiveSheet(SHEETS[savedSheet] ? savedSheet : 'teardown');
   initStorage();
 }
 

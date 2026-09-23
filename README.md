@@ -79,6 +79,8 @@ npx serve web
 - Cell ID 검색, LOT/Grade/Operator/TD Status/TD Date 필터
 - Cell ID 중복 시 경고 + 기존 기록 바로가기
 - VHX/Image 다중 첨부 + 썸네일 클릭 확대보기
-- TD Result/Further Analysis 긴 텍스트는 상세화면에서 편집
+- TD Result/Further Analysis/SEM·EDS 긴 텍스트도 표에서 바로 입력 (Enter 저장, Shift+Enter 줄바꿈)
+- 탭 2개: **Tear Down** / **Frozen IR · Spot 분석** (LOT, Cell ID, Grade, dOCV, Frozen IR Result, Pass/Fail, voltage drop, Dropped Layer, dOCV (V), Spot Found, Top/Back, x, y, Shape, SEM/EDS, Location, Long/Short side, Height)
+- 가져오기·내보내기는 현재 보고 있는 탭 기준
 - 빈 값은 0으로 바뀌지 않고 그대로 보존, OCV 소수점/IR "O.F." 등 원본 문자열 그대로 저장
 - 연도 없는 TD Date(예: "1/26")는 임의로 채우지 않고 저장 시 사용자에게 연도를 확인
