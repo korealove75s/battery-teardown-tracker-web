@@ -147,7 +147,7 @@ table.main-table { border-collapse: separate; border-spacing: 0; min-width: 100%
 
 .col-sticky-1, .col-sticky-2 { position: sticky; z-index: 3; background: inherit; }
 .col-sticky-1 { left: 0; }
-.col-sticky-2 { left: 110px; }
+.col-sticky-2 { left: var(--sticky2-left, 0px); }
 th.col-sticky-1, th.col-sticky-2 { z-index: 8; }
 
 .main-table td textarea.cell-input {

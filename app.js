@@ -421,6 +421,7 @@ function renderTable() {
   const frag = document.createDocumentFragment();
   rows.forEach((cell) => frag.appendChild(createRowElement(cell, preserve)));
   tbody.appendChild(frag);
+  updateStickyOffset();
   showEmpty(state.loaded && state.cells.length === 0);
   if (preserve) {
     const el = tbody.querySelector(`tr[data-id="${cssEsc(preserve.rowId)}"] [data-field="${cssEsc(preserve.field)}"]`);
@@ -429,6 +430,12 @@ function renderTable() {
       if (typeof preserve.selStart === 'number') { try { el.setSelectionRange(preserve.selStart, preserve.selEnd); } catch (e) {} }
     }
   }
+}
+// Pin the second frozen column (Cell ID) right after the first (LOT), using LOT's real width
+function updateStickyOffset() {
+  const first = document.querySelector('#tableHeadRow th.col-sticky-1');
+  const width = first ? first.getBoundingClientRect().width : 0;
+  document.getElementById('mainTable').style.setProperty('--sticky2-left', width + 'px');
 }
 function createRowElement(cell, preserve) {
   const tr = document.createElement('tr');
