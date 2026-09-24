@@ -21,7 +21,7 @@ const state = {
 // ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=3');
+const worker = new Worker('worker.js?v=4');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -154,10 +154,13 @@ function buildPoints() {
   const m = state.map;
   const get = (r, k) => (m[k] >= 0 ? r[m[k]] : '');
   const pts = [];
-  let skipped = 0;
+  let skipped = 0, swappedCount = 0;
   state.rows.slice(state.headerRow + 1).forEach((r, i) => {
-    const x = numOf(get(r, 'x')), y = numOf(get(r, 'y'));
+    let x = numOf(get(r, 'x')), y = numOf(get(r, 'y'));
     if (x === null || y === null) { if (String(get(r, 'x')).trim() || String(get(r, 'y')).trim()) skipped++; return; }
+    // Y larger than the cell height while X fits: X and Y were entered the wrong way round
+    let swapped = false;
+    if ($('fixSwap').checked && y > dims().yMax && x <= dims().yMax) { [x, y] = [y, x]; swapped = true; swappedCount++; }
     pts.push({
       id: String(get(r, 'id') || `Row ${state.headerRow + i + 2}`).trim(),
       x, y,
@@ -165,6 +168,7 @@ function buildPoints() {
       layer: numOf(get(r, 'layer')),
       element: M.normElement(get(r, 'element')),
       lot: String(get(r, 'lot') || '').trim(),
+      swapped,
     });
   });
   state.points = pts;
@@ -179,6 +183,7 @@ function buildPoints() {
   const noLayer = pts.filter((p) => p.layer == null).length;
   $('pointStatus').innerHTML = `${pts.length} point(s) from ${cells} cell(s)` +
     (skipped ? ` · ${skipped} row(s) skipped (X/Y not a number)` : '') +
+    (swappedCount ? ` · <b>${swappedCount} point(s) had X and Y swapped</b> (Y above ${d.yMax} mm) and were corrected` : '') +
     (out ? ` · <b>${out} point(s) outside the ${d.xMax} × ${d.yMax} mm cell</b> (drawn at the edge — check the cell size)` : '') +
     (m.layer < 0 ? ' · no layer column: the side view needs one' : noLayer ? ` · ${noLayer} point(s) without a layer (not on the side view)` : '');
   renderChips();
@@ -237,7 +242,7 @@ function cellSvg(points, view, opts) {
     const fx = Math.max(0, Math.min(1, p.x / d.xMax));
     const fy = view === 'side' ? Math.max(0, Math.min(1, (yv - 1) / (d.layers - 1))) : 1 - Math.max(0, Math.min(1, yv / d.yMax));
     const cx = bx + fx * bw, cy = by + fy * bh;
-    const tip = `${p.id}${p.lot ? ' · ' + p.lot : ''} · ${p.element || 'no material'} · X ${p.x}, Y ${p.y}${p.layer != null ? ' · layer ' + p.layer : ''}${p.topBack ? ' · ' + p.topBack : ''}`;
+    const tip = `${p.id}${p.lot ? ' · ' + p.lot : ''} · ${p.element || 'no material'} · X ${p.x}, Y ${p.y}${p.swapped ? ' (X/Y swap corrected)' : ''}${p.layer != null ? ' · layer ' + p.layer : ''}${p.topBack ? ' · ' + p.topBack : ''}`;
     s += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${o.dot}" fill="#${colorOf(p.element)}" stroke="#262626" stroke-width="0.8"><title>${esc(tip)}</title></circle>`;
   });
   return s + '</svg>';

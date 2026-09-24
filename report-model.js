@@ -176,8 +176,7 @@
       group: elementGroup(element),
       location: normLocation(r('location')),
       topBack: normTopBack(pick('topBack') || (!built ? cell.topBack : '')),
-      x: num(pick('x') || (!built ? cell.x : '')),
-      y: num(pick('y') || (!built ? cell.y : '')),
+      ...swapXY(num(pick('x') || (!built ? cell.x : '')), num(pick('y') || (!built ? cell.y : ''))),
       layer: num(pick('layer') || (!built ? cell.anodeSheet : '')),
       shape: r('shape'),
       reviewed: !!review,
@@ -185,6 +184,12 @@
     };
   }
 
+  // E81C electrode is 98 mm tall: Y above that means X and Y were entered the wrong way round
+  const Y_MAX = 98;
+  function swapXY(x, y) {
+    if (x != null && y != null && y > Y_MAX && x <= Y_MAX) return { x: y, y: x, xySwapped: true };
+    return { x, y, xySwapped: false };
+  }
   function countBy(items, keyFn) {
     const m = new Map();
     items.forEach((it) => { const k = keyFn(it); if (k === '' || k == null) return; m.set(k, (m.get(k) || 0) + 1); });

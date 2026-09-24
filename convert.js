@@ -160,6 +160,13 @@
     return { ok: true, days: days, layer: best.layer, docv: best.docv, sigma: sigma };
   }
 
+  // E81C electrode is 98 mm tall: a Y above that means X and Y were entered the wrong way round
+  var ELECTRODE_Y_MAX = 98;
+  function fixSwappedXY(x, y) {
+    var xn = num(x), yn = num(y);
+    if (xn !== null && yn !== null && yn > ELECTRODE_Y_MAX && xn <= ELECTRODE_Y_MAX) return { x: text(y), y: text(x), swapped: true };
+    return { x: text(x), y: text(y), swapped: false };
+  }
   function fmtDocv(v) {
     var n = Number(v);
     if (v === undefined || v === null || v === '' || isNaN(n)) return '';
@@ -239,8 +246,9 @@
     var burn = text(cell.burnMark);
     set('spot', burn && burn.toLowerCase() !== 'none' ? 'Spot Found' : '', 'master');
     set('topBack', titleTopBack(cell.topBack), 'master');
-    set('x', cell.x, 'master');
-    set('y', cell.y, 'master');
+    var xy = fixSwappedXY(cell.x, cell.y);
+    set('x', xy.x, 'master', xy.swapped ? 'X and Y were swapped in Master E & L (Y > ' + ELECTRODE_Y_MAX + ' mm) — corrected' : '');
+    set('y', xy.y, 'master', xy.swapped ? 'X and Y were swapped in Master E & L (Y > ' + ELECTRODE_Y_MAX + ' mm) — corrected' : '');
 
     var eds = text(cell.eds);
     var ntfCol = text(cell.ntf);
@@ -295,6 +303,8 @@
     requiredKeys: requiredKeys,
     parsePreviousReport: parsePreviousReport,
     isNum: isNum,
+    fixSwappedXY: fixSwappedXY,
+    ELECTRODE_Y_MAX: ELECTRODE_Y_MAX,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OcvConvert = api;

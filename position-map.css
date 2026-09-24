@@ -37,3 +37,4 @@
 .zoom-modal { max-width: 960px; }
 .zoom-modal .cell-pair { gap: 20px; }
 .err { color: var(--danger); }
+.check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); padding: 7px 0; }
