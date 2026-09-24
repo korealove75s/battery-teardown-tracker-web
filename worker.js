@@ -3,7 +3,8 @@ importScripts(
   'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
   'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js',
   'xlsx-subset.js?v=1',
-  'convert.js?v=1'
+  'convert.js?v=1',
+  'report-model.js?v=1'
 );
 
 var source = null; // { handle (XlsxSubset workbook or null), data, names }
@@ -20,9 +21,44 @@ function readSheets(names, opts) {
   return XLSX.read(input, Object.assign({ type: 'array', sheets: names }, opts));
 }
 
+// Streams a large text file line by line (the genealogy CSV can be hundreds of MB)
+async function streamLines(file, onLine, onProgress) {
+  var reader = file.stream().getReader();
+  var decoder = new TextDecoder();
+  var carry = '', done = 0, lastReport = 0;
+  for (;;) {
+    var chunk = await reader.read();
+    if (chunk.done) break;
+    done += chunk.value.length;
+    var textPart = carry + decoder.decode(chunk.value, { stream: true });
+    var lines = textPart.split(String.fromCharCode(10));
+    carry = lines.pop();
+    for (var i = 0; i < lines.length; i++) { var ln = lines[i]; if (ln.charCodeAt(ln.length - 1) === 13) ln = ln.slice(0, -1); onLine(ln); }
+    if (done - lastReport > 8 * 1024 * 1024) { lastReport = done; onProgress(done / file.size); }
+  }
+  carry += decoder.decode();
+  if (carry) onLine(carry);
+}
+
 self.onmessage = function (e) {
   var msg = e.data;
+  if (msg.type === 'genealogy') {
+    var parser = LvReportModel.createGenealogyParser();
+    streamLines(msg.file, parser.line, function (p) { self.postMessage({ id: msg.id, progress: p }); })
+      .then(function () {
+        var result = parser.result();
+        self.postMessage({ id: msg.id, ok: true, genealogy: result, cells: Object.keys(result).length });
+      })
+      .catch(function (err) { self.postMessage({ id: msg.id, ok: false, error: String(err && err.message || err) }); });
+    return;
+  }
   try {
+    if (msg.type === 'lotstats') {
+      var lwb = XLSX.read(new Uint8Array(msg.buf), { type: 'array' });
+      var lrows = XLSX.utils.sheet_to_json(lwb.Sheets[lwb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      self.postMessage({ id: msg.id, ok: true, stats: LvReportModel.parseLotStats(lrows).rows });
+      return;
+    }
     if (msg.type === 'source') {
       var data = new Uint8Array(msg.buf);
       var handle = null, names;

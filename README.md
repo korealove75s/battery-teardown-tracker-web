@@ -57,3 +57,19 @@ The former "OCV Report Builder" site is now part of this tab
 5. **Export Excel** on this tab writes the report layout (headers on row 2, No. in column B), keeps the highlights, and adds a Legend sheet.
 
 Voltage drop rule: for each layer (column B) of the cell's own tracking sheet, dOCV = the largest fall between the tracking dates in C/D/E. A cell is **Drop** when one inner layer is more than 2.6σ above the others (the sheet's R6 formula) **and** that fall is at least 1.5 mV (adjustable in the import dialog). Otherwise it is **NTF**. The conversion rules are in `convert.js`.
+
+## Weekly low-voltage PowerPoint (report.html)
+
+https://sangnew.github.io/battery-teardown-tracker-web/report.html (also linked from the tracker header as **Weekly PPT report**)
+
+The page builds the weekly "E81C 양산랏 저전압 현황" deck: 9 A4 slides with native, editable charts. All files are read in the browser and nothing is uploaded.
+
+| Input | Example | Used for |
+|---|---|---|
+| OCV tracking workbook (required) | Mass Production E&L Grade OCV Tracking Sheet | Cells, drop analysis from each tracking sheet, EDS, top/back, x/y, layer |
+| Analysis report (recommended) | test1.xlsx or the Analysis tab's *Export Excel* | Location (inside/outside), Shape, reviewed values |
+| Lot summary (required) | test2.xlsx | Monthly trend, production, E/L rates |
+| Genealogy CSV (optional) | 9.241.csv | AZS stacker / DNC (slide 5) and electrode lots (slides 6–7) |
+
+Slides: 1 monthly trend with improvement notes, 2 five-analysis results, 3–4 foreign-material locations, 5 coating-top AZS/DNC, 6–7 cathode/anode electrode lots, 8 cumulative results, 9 C4~SOP history (static data from the original deck).
+Improvement notes and headline sentences can be edited on the page. The code is in `report-model.js` (numbers) and `report-ppt.js` (layout).

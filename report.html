@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weekly Low-Voltage Report</title>
+<link rel="stylesheet" href="report.css?v=1" />
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="convert.js?v=1"></script>
+<script src="report-model.js?v=1"></script>
+<script src="report-ppt.js?v=1"></script>
+</head>
+<body>
+<header class="app-header">
+  <div>
+    <h1>Weekly Low-Voltage Report</h1>
+    <p class="sub">Builds the weekly "E81C 양산랏 저전압 현황" PowerPoint from your data files. Files are read in your browser and are never uploaded.</p>
+  </div>
+  <div class="header-actions">
+    <a class="btn btn-ghost" href="./">← Battery Teardown Tracker</a>
+    <button class="btn btn-danger" id="resetBtn" type="button">Reset</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="step-head"><span class="step-num">1</span><h2>Data files</h2></div>
+    <div class="file-grid">
+      <div class="file-card" data-key="ocv">
+        <div class="file-head"><b>OCV tracking workbook</b><span class="tag req">Required</span></div>
+        <p class="hint">Mass Production E&amp;L Grade OCV Tracking Sheet (.xlsx) — Master E &amp; L sheet and each cell's tracking sheet.</p>
+        <label class="btn btn-secondary file-btn">Choose file<input type="file" accept=".xlsx,.xlsm,.xls" hidden /></label>
+        <div class="file-status"></div>
+      </div>
+      <div class="file-card" data-key="review">
+        <div class="file-head"><b>Analysis report</b><span class="tag rec">Recommended</span></div>
+        <p class="hint">Frozen IR · Spot analysis in the report layout (e.g. test1.xlsx, or <i>Export Excel</i> from the tracker's Analysis tab). Supplies Location (inside / outside), Shape and reviewed values.</p>
+        <label class="btn btn-secondary file-btn">Choose file<input type="file" accept=".xlsx,.xls" hidden /></label>
+        <div class="file-status"></div>
+      </div>
+      <div class="file-card" data-key="stats">
+        <div class="file-head"><b>Lot production &amp; defect summary</b><span class="tag req">Required</span></div>
+        <p class="hint">Per PKG lot: E-grade %, L-grade %, production, E count, HM, L count (e.g. test2.xlsx). Drives the monthly trend and defect rates.</p>
+        <label class="btn btn-secondary file-btn">Choose file<input type="file" accept=".xlsx,.xls,.csv" hidden /></label>
+        <div class="file-status"></div>
+      </div>
+      <div class="file-card" data-key="genealogy">
+        <div class="file-head"><b>Process genealogy CSV</b><span class="tag opt">Optional</span></div>
+        <p class="hint">Cell → mixing / coating / roll press / slitting / DNC / AZS / packaging export (e.g. 9.241.csv). Needed for the AZS/DNC and electrode slides.</p>
+        <label class="btn btn-secondary file-btn">Choose file<input type="file" accept=".csv,.txt" hidden /></label>
+        <div class="file-status"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="step-head"><span class="step-num">2</span><h2>Report settings</h2></div>
+    <div class="settings-grid">
+      <label class="field">Report lots from <select id="fromLot"></select></label>
+      <label class="field">to <select id="toLot"></select></label>
+      <label class="field">Cumulative from <input type="text" id="cumFrom" value="FD10" /></label>
+      <label class="field">Trend from <input type="text" id="trendFrom" value="FD10" /></label>
+      <label class="field">Report date <input type="text" id="reportDate" /></label>
+      <label class="field">Team <input type="text" id="team" value="ESHG 품질팀" /></label>
+      <label class="field">E criterion <input type="text" id="eCriterion" value="2.42mV" /></label>
+      <label class="field">L criterion <input type="text" id="lCriterion" value="3.5시그마" /></label>
+      <label class="field">Drop minimum (mV) <input type="number" id="minDrop" value="1.5" step="0.1" min="0" /></label>
+    </div>
+    <details class="notes-box">
+      <summary>Improvement notes on the trend slide (slide 1)</summary>
+      <p class="hint">One note per block: the first line is the PKG lot where the flag goes, the next lines are the text. Separate notes with a blank line. Saved in this browser.</p>
+      <textarea id="notes" rows="12" spellcheck="false"></textarea>
+      <button class="btn btn-ghost small" id="notesDefaultBtn" type="button">Restore defaults</button>
+    </details>
+    <details class="notes-box">
+      <summary>Headline sentences (optional — leave blank for the automatic text)</summary>
+      <label class="stack">Slide 1<textarea id="trendHeadline" rows="2"></textarea></label>
+      <label class="stack">Slide 2<textarea id="headline" rows="2"></textarea></label>
+      <label class="stack">Slide 8 (cumulative)<textarea id="cumHeadline" rows="2"></textarea></label>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="step-head"><span class="step-num">3</span><h2>Build the PowerPoint</h2></div>
+    <div class="build-row">
+      <button class="btn btn-primary" id="buildBtn" type="button" disabled>Build &amp; download PPTX</button>
+      <span class="hint" id="buildHint">Load the required files first.</span>
+    </div>
+    <div class="summary" id="summary" hidden></div>
+    <p class="hint">Slides: 1 trend · 2 five-analysis results · 3–4 foreign-material location · 5 coating-top (AZS / DNC) · 6–7 electrodes (cathode / anode) · 8 cumulative results · 9 history appendix. Charts are native PowerPoint charts, so they can be edited after download.</p>
+  </section>
+</main>
+
+<div class="modal-overlay" id="resetOverlay">
+  <div class="modal">
+    <h2>Reset</h2>
+    <p>This unloads all files and clears the settings on this page (improvement notes return to the defaults).</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="resetCancelBtn" type="button">Cancel</button>
+      <button class="btn btn-danger" id="resetConfirmBtn" type="button">Reset</button>
+    </div>
+  </div>
+</div>
+<div class="busy" id="busy" hidden><div class="busy-box"><div class="spinner"></div><span id="busyText">Working…</span></div></div>
+<div class="toast" id="toast"></div>
+<script src="report.js?v=1"></script>
+</body>
+</html>
