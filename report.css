@@ -80,3 +80,22 @@ textarea { font-family: var(--sans); resize: vertical; }
 .toast.show { opacity: 1; }
 .toast.error { background: var(--danger); }
 @media (max-width: 640px) { .app-header { padding: 14px 16px; } }
+/* Cell count (colored Cell ID + J) and the J-empty check */
+.check-field { flex-direction: row; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--text); font-size: 13px; }
+.check-field input { width: auto; }
+.count-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.count-panel h3 { margin: 0 0 6px; font-size: 14px; }
+.count-table-wrap { overflow-x: auto; }
+.count-table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.count-table th, .count-table td { border-bottom: 1px solid var(--border); padding: 5px 8px; text-align: right; white-space: nowrap; }
+.count-table th:first-child, .count-table td:first-child { text-align: left; }
+.count-table th { color: var(--text-dim); font-weight: 600; }
+.count-table tr.in-range td { background: var(--accent-soft); }
+.count-table td.strong { font-weight: 700; }
+.jcheck { margin-top: 12px; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, var(--warn) 10%, var(--panel)); }
+.jcheck.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 8%, var(--panel)); }
+.jcheck h3 { margin: 0 0 6px; font-size: 14px; }
+.jcheck .count-table td { text-align: left; }
+.jcheck .count-table tr.in-range td { background: color-mix(in srgb, var(--warn) 22%, var(--panel)); font-weight: 600; }
+.swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--border-strong); vertical-align: -1px; margin-right: 6px; }
+.filled { color: var(--warn); font-weight: 700; }

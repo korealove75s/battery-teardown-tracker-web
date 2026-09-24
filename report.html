@@ -4,10 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Weekly Low-Voltage Report</title>
-<link rel="stylesheet" href="report.css?v=1" />
+<link rel="stylesheet" href="report.css?v=2" />
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
-<script src="convert.js?v=2"></script>
-<script src="report-model.js?v=2"></script>
+<script src="convert.js?v=3"></script>
+<script src="report-model.js?v=3"></script>
 <script src="report-ppt.js?v=4"></script>
 </head>
 <body>
@@ -51,6 +51,8 @@
         <div class="file-status"></div>
       </div>
     </div>
+    <div class="count-panel" id="countPanel" hidden></div>
+    <div class="jcheck" id="jCheck" hidden></div>
   </section>
 
   <section class="card">
@@ -65,6 +67,7 @@
       <label class="field">E criterion <input type="text" id="eCriterion" value="2.42mV" /></label>
       <label class="field">L criterion <input type="text" id="lCriterion" value="3.5시그마" /></label>
       <label class="field">Drop minimum (mV) <input type="number" id="minDrop" value="1.5" step="0.1" min="0" /></label>
+      <label class="field check-field"><input type="checkbox" id="coloredOnly" checked /> Count only cells whose Cell ID is colored and whose J column (NTF) is filled</label>
     </div>
     <details class="notes-box">
       <summary>Improvement notes on the trend slide (slide 1)</summary>
@@ -103,6 +106,6 @@
 </div>
 <div class="busy" id="busy" hidden><div class="busy-box"><div class="spinner"></div><span id="busyText">Working…</span></div></div>
 <div class="toast" id="toast"></div>
-<script src="report.js?v=2"></script>
+<script src="report.js?v=3"></script>
 </body>
 </html>

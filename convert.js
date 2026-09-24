@@ -84,12 +84,48 @@
     return m ? m[1] + String(m[2]).padStart(2, '0') : lot;
   }
 
+  function colLetter(i) { var s = ''; for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; }
+
+  // Column spans of the "2. OCV Tracking" and "3. Tear Down Analysis" sections (the label row above
+  // the header). Falls back to R-U / V-Y, the layout of the V5 tracking sheet.
+  function detectSections(rows, headerRow) {
+    for (var r = Math.max(0, headerRow - 3); r < headerRow; r++) {
+      var row = rows[r] || [];
+      var s2 = -1, s3 = -1;
+      row.forEach(function (v, i) {
+        if (/^2\.\s*ocv\s*tracking/i.test(text(v))) s2 = i;
+        if (/^3\.\s*tear\s*down/i.test(text(v))) s3 = i;
+      });
+      if (s2 < 0 || s3 < 0) continue;
+      var end = s3 + 1;
+      while (end < row.length && !text(row[end])) end++;
+      return { ocvTracking: [s2, s3 - 1], tearDown: [s3, end - 1] };
+    }
+    return { ocvTracking: [17, 20], tearDown: [21, 24] };
+  }
+  function anyFilled(row, span) {
+    for (var i = span[0]; i <= span[1]; i++) if (text(row[i])) return true;
+    return false;
+  }
+
+  // Cell fill -> "RRGGBB" when the cell is really colored ('' for no fill or plain white)
+  function fillHex(style) {
+    if (!style || !style.patternType || style.patternType === 'none') return '';
+    var fg = style.fgColor || {};
+    if (fg.rgb) { var rgb = String(fg.rgb).slice(-6).toUpperCase(); return rgb === 'FFFFFF' ? '' : rgb; }
+    if (fg.theme != null) return fg.theme === 0 && !fg.tint ? '' : 'theme';
+    if (fg.indexed != null) return fg.indexed === 9 || fg.indexed === 64 ? '' : 'indexed';
+    return '';
+  }
+
   // Parse master rows into cell records (in sheet order).
-  function parseMaster(rows, sheetNames) {
+  // fillAt(rowIndex, colIndex) -> style of that cell (optional; gives each record its Cell ID color)
+  function parseMaster(rows, sheetNames, fillAt) {
     var det = detectMasterColumns(rows);
     if (!det) throw new Error('Could not find the "Cell ID" header row in the Master E & L sheet.');
     var c = det.cols;
     var missingHeaders = Object.keys(MASTER_HEADERS).filter(function (f) { return c[f] === undefined; });
+    var sections = detectSections(rows, det.headerRow);
     var sheetSet = {};
     (sheetNames || []).forEach(function (n) { sheetSet[text(n).toUpperCase()] = n; });
     var cells = [];
@@ -99,9 +135,17 @@
       if (!id) continue;
       var rec = { row: r + 1, trackingSheet: sheetSet[id.toUpperCase()] || null };
       Object.keys(c).forEach(function (f) { rec[f] = text(row[c[f]]); });
+      rec.idColor = fillAt ? fillHex(fillAt(r, c.cellId)) : '';
+      rec.ocvTrackingFilled = anyFilled(row, sections.ocvTracking);
+      rec.tearDownFilled = anyFilled(row, sections.tearDown);
       cells.push(rec);
     }
-    return { cells: cells, missingHeaders: missingHeaders };
+    var layout = {
+      ntfCol: c.ntf === undefined ? '' : colLetter(c.ntf),
+      ocvTracking: colLetter(sections.ocvTracking[0]) + '–' + colLetter(sections.ocvTracking[1]),
+      tearDown: colLetter(sections.tearDown[0]) + '–' + colLetter(sections.tearDown[1]),
+    };
+    return { cells: cells, missingHeaders: missingHeaders, layout: layout };
   }
 
   function lotSummary(cells) {
@@ -295,6 +339,8 @@
     DEFAULT_MIN_DROP_V: DEFAULT_MIN_DROP_V,
     detectMasterColumns: detectMasterColumns,
     parseMaster: parseMaster,
+    fillHex: fillHex,
+    colLetter: colLetter,
     lotSummary: lotSummary,
     lotSortKey: lotSortKey,
     padLot: padLot,

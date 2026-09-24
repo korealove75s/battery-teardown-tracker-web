@@ -71,6 +71,9 @@ The page builds the weekly "E81C 양산랏 저전압 현황" deck: 9 A4 slides w
 | Lot summary (required) | test2.xlsx | Monthly trend, production, E/L rates |
 | Genealogy CSV (optional) | 9.241.csv | AZS stacker / DNC (slide 5) and electrode lots (slides 6–7) |
 
+Which cells are counted: by default only Master E & L rows whose **Cell ID (column F) has a fill color** (white = no color) **and whose J column (NTF) is filled**. The per-lot count table appears under step 1 after the OCV workbook loads.
+Rows with an empty J column but data in "2. OCV Tracking" (R–U) or "3. Tear Down Analysis" (V–Y) are listed in a highlighted box, since they are not counted until J is filled. The rule can be turned off in step 2 (previous behavior: cells with a tracking sheet or an analysis-report row).
+
 Slides: 1 monthly trend with improvement notes, 2 five-analysis results, 3–4 foreign-material locations, 5 coating-top AZS/DNC, 6–7 cathode/anode electrode lots, 8 cumulative results, 9 C4~SOP history (static data from the original deck).
 Improvement notes and headline sentences can be edited on the page. The code is in `report-model.js` (numbers) and `report-ppt.js` (layout).
 

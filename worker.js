@@ -3,8 +3,8 @@ importScripts(
   'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
   'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js',
   'xlsx-subset.js?v=1',
-  'convert.js?v=2',
-  'report-model.js?v=2'
+  'convert.js?v=3',
+  'report-model.js?v=3'
 );
 
 var source = null; // { handle (XlsxSubset workbook or null), data, names }
@@ -140,11 +140,19 @@ self.onmessage = function (e) {
       }
       source = { handle: handle, data: data, names: names };
       var masterName = findMasterSheet(names);
-      var wb = readSheets([masterName], { dense: true });
-      var rows = XLSX.utils.sheet_to_json(wb.Sheets[masterName], { header: 1, raw: false, defval: '' });
-      var parsed = OcvConvert.parseMaster(rows, names);
+      var wb = readSheets([masterName], { dense: true, cellStyles: true });
+      var mws = wb.Sheets[masterName];
+      var rows = XLSX.utils.sheet_to_json(mws, { header: 1, raw: false, defval: '' });
+      // rows[] starts at the sheet's used range, so offset back to sheet coordinates for the fill lookup
+      var start = XLSX.utils.decode_range(mws['!ref'] || 'A1').s;
+      var grid = mws['!data'] || (Array.isArray(mws) ? mws : null);
+      var fillAt = function (r, c) {
+        var cell = grid ? (grid[r + start.r] || [])[c + start.c] : mws[XLSX.utils.encode_cell({ r: r + start.r, c: c + start.c })];
+        return cell && cell.s;
+      };
+      var parsed = OcvConvert.parseMaster(rows, names, fillAt);
       self.postMessage({
-        id: msg.id, ok: true, masterName: masterName, sheetCount: names.length,
+        id: msg.id, ok: true, masterName: masterName, sheetCount: names.length, layout: parsed.layout,
         cells: parsed.cells, missingHeaders: parsed.missingHeaders, lots: OcvConvert.lotSummary(parsed.cells),
       });
     } else if (msg.type === 'tracking') {

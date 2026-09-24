@@ -1411,7 +1411,7 @@ let ocvSeq = 0;
 const ocvPending = new Map();
 function callOcvWorker(msg, transfer) {
   if (!ocvWorker) {
-    ocvWorker = new Worker('worker.js?v=4');
+    ocvWorker = new Worker('worker.js?v=5');
     ocvWorker.onmessage = (e) => {
       const p = ocvPending.get(e.data.id);
       if (!p) return;

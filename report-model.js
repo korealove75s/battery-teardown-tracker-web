@@ -374,6 +374,15 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Which Master rows count as analyzed cells
+  //   counted: Cell ID is colored and the NTF column (J) holds a result
+  //   jMissing: J is empty although "2. OCV Tracking" or "3. Tear Down Analysis" has data — check the sheet
+  // ---------------------------------------------------------------------------
+  function isCounted(c) { return !!c.idColor && text(c.ntf) !== ''; }
+  function isJMissing(c) { return text(c.ntf) === '' && !!(c.ocvTrackingFilled || c.tearDownFilled); }
+  function jMissingCells(cells) { return cells.filter(isJMissing); }
+
+  // ---------------------------------------------------------------------------
   // Assemble everything the deck needs
   //   master: parsed Master E & L cells; built: { CELLID: buildRow() } for cells with tracking sheets
   //   review: { CELLID: analysis-report row }; stats: parseLotStats().rows; genealogy: { CELLID: {...} }
@@ -388,15 +397,17 @@
     const label = `${from} ~ ${to}`;
     const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 
-    // This week's lots: cells with a tracking sheet or a reviewed analysis row
-    const reportRecords = master.filter((c) => inRange(c.lot, from, to) && (c.trackingSheet || review[key(c)])).map(mk);
+    // Colored-ID rule (default): only cells whose Cell ID is colored and whose J column is filled.
+    // Otherwise: this week's cells with a tracking sheet or a reviewed analysis row.
+    const colored = settings.coloredOnly !== false;
+    const reportRecords = master.filter((c) => inRange(c.lot, from, to) && (colored ? isCounted(c) : (c.trackingSheet || review[key(c)]))).map(mk);
     const lots = [...new Set(reportRecords.map((r) => r.lot))].sort();
     const summary = analysisSummary(reportRecords);
     const lotSum = sumLots(stats, from, to);
     const funnelHeader = (lab, s) => `E81C ${lab} ${kfmt(s.production)}\nE 등급 불량률 ${s.eRate.toFixed(2)}% (판정, : ${settings.eCriterion || '2.42mV'})\nL등급 불량률 ${s.lRate.toFixed(2)}% (판정 : ${settings.lCriterion || '3.5시그마'})`;
 
     // Cumulative: every analyzed cell from the cumulative start lot
-    const cumRecords = master.filter((c) => inRange(c.lot, cumFrom, to) && (built[key(c)] || review[key(c)] || text(c.ntf) || text(c.anodeSheet) || text(c.voltageDrop))).map(mk);
+    const cumRecords = master.filter((c) => inRange(c.lot, cumFrom, to) && (colored ? isCounted(c) : (built[key(c)] || review[key(c)] || text(c.ntf) || text(c.anodeSheet) || text(c.voltageDrop)))).map(mk);
     const cumSummary = analysisSummary(cumRecords);
     const cumLots = [...new Set(cumRecords.map((r) => r.lot))].sort();
     // The cumulative range starts at the first lot that actually has analyzed cells
@@ -435,12 +446,19 @@
       outside: outsideEquipment(summary.genuineRecords.filter((r) => r.location === 'Coating Top' && r.g && r.g.azsPos)),
       cathode: electrodeAnalysis(reportRecords, summary.genuineRecords, 'C', lots),
       anode: electrodeAnalysis(reportRecords, summary.genuineRecords, 'A', lots),
-      counts: { report: reportRecords.length, reviewed: reportRecords.filter((r) => r.reviewed).length, withGenealogy: reportRecords.filter((r) => r.g).length, cumulative: cumRecords.length },
+      counts: {
+        report: reportRecords.length, reviewed: reportRecords.filter((r) => r.reviewed).length, withGenealogy: reportRecords.filter((r) => r.g).length, cumulative: cumRecords.length,
+        coloredOnly: colored,
+        // Colored cells of the report lots that are not counted yet because J is still empty
+        pending: master.filter((c) => inRange(c.lot, from, to) && c.idColor && !text(c.ntf)).length,
+        jMissing: master.filter((c) => inRange(c.lot, from, to) && isJMissing(c)).length,
+      },
     };
   }
 
   const api = {
     assemble,
+    isCounted, isJMissing, jMissingCells,
     text, num, padLot, lotKey, lotMonth, shortLot, inRange, lotParts,
     normElement, elementGroup, normLocation, normTopBack, normDrop, GROUPS, LOCATIONS,
     ELEMENT_COLORS, elementColor, LOCATION_COLORS, TOPBACK_COLORS,

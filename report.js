@@ -16,7 +16,7 @@ const data = {
 // ---------------------------------------------------------------------------
 // Worker (shared with the tracker)
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=4');
+const worker = new Worker('worker.js?v=5');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -86,10 +86,13 @@ async function loadFile(key, file) {
       busy(`Reading "${file.name}"…`);
       const buf = await file.arrayBuffer();
       const res = await callWorker({ type: 'source', buf }, [buf]);
-      data.ocv = { fileName: file.name, cells: res.cells, lots: res.lots, masterName: res.masterName };
-      const withSheet = res.cells.filter((c) => c.trackingSheet).length;
-      setFileStatus(key, `✓ ${escapeHtml(file.name)}<br/>${res.cells.length} cells in "${escapeHtml(res.masterName)}", ${withSheet} with an OCV tracking sheet`, 'ok');
+      data.ocv = { fileName: file.name, cells: res.cells, lots: res.lots, masterName: res.masterName, layout: res.layout || {} };
+      const counted = res.cells.filter(M.isCounted).length;
+      const jMissing = M.jMissingCells(res.cells).length;
+      setFileStatus(key, `✓ ${escapeHtml(file.name)}<br/>${res.cells.length} cells in "${escapeHtml(res.masterName)}" · ${counted} counted (colored Cell ID + ${escapeHtml(data.ocv.layout.ntfCol || 'J')} filled)` +
+        (jMissing ? `<br/><b style="color:var(--warn)">⚠ ${jMissing} cell(s) to check — see below</b>` : ''), 'ok');
       fillLotSelects();
+      renderCounts();
     } else if (key === 'review') {
       busy(`Reading "${file.name}"…`);
       const buf = await file.arrayBuffer();
@@ -99,6 +102,7 @@ async function loadFile(key, file) {
       const withLoc = Object.values(res.report).filter((r) => (r.location || '').trim()).length;
       setFileStatus(key, `✓ ${escapeHtml(file.name)}<br/>${Object.keys(res.report).length} cells (sheet "${escapeHtml(res.sheetName)}"), ${withLoc} with a Location`, 'ok');
       fillLotSelects(true);
+      renderCounts();
     } else if (key === 'stats') {
       busy(`Reading "${file.name}"…`);
       const buf = await file.arrayBuffer();
@@ -144,6 +148,64 @@ function fillLotSelects(preferReview) {
   from.value = dFrom; to.value = dTo;
 }
 
+// ---------------------------------------------------------------------------
+// Per-lot cell count (colored Cell ID + J filled) and the "J empty but sections 2/3 filled" check
+// ---------------------------------------------------------------------------
+function swatch(hex) {
+  const bg = /^[0-9A-F]{6}$/.test(hex) ? `#${hex}` : 'repeating-linear-gradient(45deg,#bbb 0 3px,#eee 3px 6px)';
+  return `<span class="swatch" style="background:${bg}" title="${escapeHtml(hex ? `Fill ${hex}` : 'No fill')}"></span>`;
+}
+function renderCounts() {
+  const panel = $('countPanel'), check = $('jCheck');
+  if (!data.ocv) { panel.hidden = true; check.hidden = true; return; }
+  const cells = data.ocv.cells.filter((c) => M.lotParts(c.lot));
+  const lay = data.ocv.layout;
+  const jCol = lay.ntfCol || 'J';
+  const from = $('fromLot').value, to = $('toLot').value;
+  const inRange = (lot) => from && to && M.inRange(lot, from, to);
+
+  const byLot = new Map();
+  cells.forEach((c) => {
+    const lot = M.padLot(c.lot);
+    const s = byLot.get(lot) || { total: 0, colored: 0, counted: 0, pending: 0 };
+    s.total++;
+    if (c.idColor) s.colored++;
+    if (M.isCounted(c)) s.counted++;
+    else if (c.idColor) s.pending++;
+    byLot.set(lot, s);
+  });
+  const lots = [...byLot.keys()].sort();
+  const sum = (k, onlyRange) => lots.filter((l) => !onlyRange || inRange(l)).reduce((n, l) => n + byLot.get(l)[k], 0);
+  const row = (label, s, cls) => `<tr class="${cls || ''}"><td>${label}</td><td>${s.total}</td><td>${s.colored}</td><td class="strong">${s.counted}</td><td>${s.pending || ''}</td></tr>`;
+  const rangeTotals = { total: sum('total', true), colored: sum('colored', true), counted: sum('counted', true), pending: sum('pending', true) };
+  panel.hidden = false;
+  panel.innerHTML = `<h3>Cell count per lot — colored Cell ID + ${escapeHtml(jCol)} column filled</h3>` +
+    `<p class="hint">Only cells whose Cell ID has a fill color (white counts as no color) <b>and</b> whose ${escapeHtml(jCol)} column (NTF result) is filled are counted in the report. ` +
+    `"Colored, ${escapeHtml(jCol)} empty" cells are not counted yet. Highlighted rows are the report lots (${escapeHtml(from)} ~ ${escapeHtml(to)}): <b>${rangeTotals.counted} cells</b>.</p>` +
+    `<div class="count-table-wrap"><table class="count-table"><thead><tr><th>Lot</th><th>All cells</th><th>Colored ID</th><th>Counted</th><th>Colored, ${escapeHtml(jCol)} empty</th></tr></thead><tbody>` +
+    lots.map((l) => row(escapeHtml(l), byLot.get(l), inRange(l) ? 'in-range' : '')).join('') +
+    row(`<b>Report lots ${escapeHtml(from)} ~ ${escapeHtml(to)}</b>`, rangeTotals) +
+    `</tbody></table></div>`;
+
+  const flagged = M.jMissingCells(data.ocv.cells)
+    .sort((a, b) => (inRange(b.lot) - inRange(a.lot)) || a.row - b.row);
+  check.hidden = false;
+  check.classList.toggle('ok', !flagged.length);
+  if (!flagged.length) {
+    check.innerHTML = `<h3>✓ ${escapeHtml(jCol)} column check</h3><p class="hint">No cell has an empty ${escapeHtml(jCol)} column with data in "2. OCV Tracking" (${escapeHtml(lay.ocvTracking || 'R–U')}) or "3. Tear Down Analysis" (${escapeHtml(lay.tearDown || 'V–Y')}).</p>`;
+    return;
+  }
+  const nInRange = flagged.filter((c) => inRange(c.lot)).length;
+  const mark = (on) => (on ? '<span class="filled">● filled</span>' : '—');
+  check.innerHTML = `<h3>⚠ ${flagged.length} cell(s): ${escapeHtml(jCol)} column empty, but OCV tracking / tear-down data entered</h3>` +
+    `<p class="hint">These cells are <b>not counted</b> because ${escapeHtml(jCol)} (NTF) is blank, yet "2. OCV Tracking" (${escapeHtml(lay.ocvTracking || 'R–U')}) or "3. Tear Down Analysis" (${escapeHtml(lay.tearDown || 'V–Y')}) has data. ` +
+    `Fill in ${escapeHtml(jCol)} in "${escapeHtml(data.ocv.masterName)}" and reload the file.${nInRange ? ` <b>${nInRange} of them are in the report lots.</b>` : ''}</p>` +
+    `<div class="count-table-wrap"><table class="count-table"><thead><tr><th>Excel row</th><th>Lot</th><th>Cell ID</th><th>2. OCV Tracking</th><th>3. Tear Down</th><th>Report lots</th></tr></thead><tbody>` +
+    flagged.map((c) => `<tr class="${inRange(c.lot) ? 'in-range' : ''}"><td>${c.row}</td><td>${escapeHtml(M.padLot(c.lot))}</td><td>${swatch(c.idColor)}${escapeHtml(c.cellId)}</td>` +
+      `<td>${mark(c.ocvTrackingFilled)}</td><td>${mark(c.tearDownFilled)}</td><td>${inRange(c.lot) ? 'Yes' : ''}</td></tr>`).join('') +
+    `</tbody></table></div>`;
+}
+
 function updateBuildState() {
   const ready = !!(data.ocv && data.stats);
   $('buildBtn').disabled = !ready;
@@ -164,6 +226,7 @@ async function build() {
     eCriterion: $('eCriterion').value.trim(), lCriterion: $('lCriterion').value.trim(),
     notes: textToNotes($('notes').value),
     trendHeadline: $('trendHeadline').value.trim(), headline: $('headline').value.trim(), cumHeadline: $('cumHeadline').value.trim(),
+    coloredOnly: $('coloredOnly').checked,
   };
   if (M.lotKey(settings.from) > M.lotKey(settings.to)) { showToast('"From" lot must be before "to" lot.', true); return; }
   const minMv = Number($('minDrop').value);
@@ -202,10 +265,13 @@ function renderSummary(model, fileName) {
   if (!model.counts.reviewed) warn.push('No cell of these lots is in the analysis report, so Location / Shape come out empty.');
   else if (model.counts.reviewed < model.counts.report) warn.push(`${model.counts.report - model.counts.reviewed} cell(s) are not in the analysis report (Location unknown).`);
   if (!model.counts.withGenealogy) warn.push('No process history for these cells — slides 5–7 are empty.');
+  const jCol = (data.ocv.layout && data.ocv.layout.ntfCol) || 'J';
+  if (model.counts.jMissing) warn.push(`${model.counts.jMissing} cell(s) in these lots have an empty ${jCol} column but OCV tracking / tear-down data — not counted (see step 1).`);
   const el = $('summary');
   el.hidden = false;
   el.className = 'summary' + (warn.length ? ' warn' : '');
   el.innerHTML = `<b>${escapeHtml(fileName)}</b><br/>` +
+    (model.counts.coloredOnly ? `Counted cells: colored Cell ID + ${escapeHtml(jCol)} filled${model.counts.pending ? ` (${model.counts.pending} colored cell(s) with ${escapeHtml(jCol)} still empty are not counted)` : ''}<br/>` : '') +
     `${escapeHtml(model.label)}: ${s.total} cells analyzed · voltage drop ${s.dropAll} (${M.pct(s.dropAll, s.total)}%) · genuine ${s.genuine} · NTF ${s.ntf} · ` +
     `coating top ${s.loc['Coating Top']} / inside ${s.loc['Coating Inside']} / Al foil ${s.loc['Al Foil Surface']}${s.locUnknown ? ` / unknown ${s.locUnknown}` : ''}<br/>` +
     `Production ${model.report.lotSum.production.toLocaleString()} · E ${model.report.lotSum.eRate.toFixed(2)}% · L ${model.report.lotSum.lRate.toFixed(2)}% · cumulative ${escapeHtml(model.cumLabel)}: ${model.cumulative.summary.total} cells` +
@@ -220,11 +286,12 @@ function doReset() {
   document.querySelectorAll('.file-card').forEach((c) => { c.classList.remove('loaded', 'error'); c.querySelector('.file-status').innerHTML = ''; c.querySelector('input[type=file]').value = ''; });
   $('fromLot').innerHTML = ''; $('toLot').innerHTML = '';
   $('cumFrom').value = 'FD10'; $('trendFrom').value = 'FD10'; $('reportDate').value = today(); $('team').value = 'ESHG 품질팀';
-  $('eCriterion').value = '2.42mV'; $('lCriterion').value = '3.5시그마'; $('minDrop').value = '1.5';
+  $('eCriterion').value = '2.42mV'; $('lCriterion').value = '3.5시그마'; $('minDrop').value = '1.5'; $('coloredOnly').checked = true;
   ['trendHeadline', 'headline', 'cumHeadline'].forEach((id) => { $(id).value = ''; });
   try { localStorage.removeItem(NOTES_KEY); } catch (e) {}
   $('notes').value = notesToText(P.DEFAULT_NOTES);
   $('summary').hidden = true;
+  renderCounts();
   $('resetOverlay').classList.remove('open');
   updateBuildState();
   showToast('Reset complete.');
@@ -241,6 +308,7 @@ function init() {
     c.addEventListener('dragover', (e) => e.preventDefault());
     c.addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadFile(c.dataset.key, f); });
   });
+  ['fromLot', 'toLot'].forEach((id) => $(id).addEventListener('change', renderCounts));
   $('buildBtn').onclick = build;
   $('resetBtn').onclick = () => $('resetOverlay').classList.add('open');
   $('resetCancelBtn').onclick = () => $('resetOverlay').classList.remove('open');
