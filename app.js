@@ -766,9 +766,18 @@ function renderTableHead() {
   headRow.appendChild(th);
   headRow.dataset.built = activeSheetKey;
 }
+// Rows in lot order (FH04 before FH09, FH1 = FH01), empty LOT last; same lot keeps the order rows were added
+function lotOrderKey(c) {
+  const lot = String(c.lot || '').trim();
+  return lot ? '0' + window.OcvConvert.lotSortKey(window.OcvConvert.padLot(lot.toUpperCase())) : '1';
+}
+function sortByLot(rows) {
+  return rows.map((c, i) => ({ c, i, k: lotOrderKey(c) }))
+    .sort((a, b) => a.k.localeCompare(b.k) || a.i - b.i).map((x) => x.c);
+}
 function getFilteredCells() {
   const f = state.filters;
-  return state.cells.filter((c) => {
+  return sortByLot(state.cells).filter((c) => {
     if (f.search && !(c.cellId || '').toLowerCase().includes(f.search.toLowerCase())) return false;
     for (const [key, val] of Object.entries(f.sel)) { if (val && c[key] !== val) return false; }
     if (SHEET.dateKey && f.date && !(c[SHEET.dateKey] || '').toLowerCase().includes(f.date.toLowerCase())) return false;
@@ -1361,7 +1370,7 @@ function showImportReviewModal({ parsed, ignoredHeaders, dupCount, yearItems }) 
 // Export (plain browser download — no sandbox restrictions on a real site)
 // ---------------------------------------------------------------------------
 function buildExportRows() {
-  return state.cells.map((c) => {
+  return sortByLot(state.cells).map((c) => {
     const row = {};
     COLUMNS.forEach((col) => {
       row[col.label] = col.type === 'image' ? (c.images || []).map((im) => im.originalName || im.path).join('; ') : (c[col.key] || '');
