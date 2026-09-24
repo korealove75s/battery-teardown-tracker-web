@@ -40,6 +40,51 @@ async function streamLines(file, onLine, onProgress) {
   if (carry) onLine(carry);
 }
 
+// ---- Generic workbook reading (position map page) ----
+var book = null;
+function readBookSheets(names, opts) {
+  var input = book.handle ? book.handle.open(names) : book.data;
+  return XLSX.read(input, Object.assign({ type: 'array', sheets: names }, opts));
+}
+// Rows of a sheet, trimmed to the cells that actually hold values (some sheets claim a range of
+// a million rows / 16k columns because of formatting)
+function sheetRows(ws) {
+  if (!ws) return [];
+  var dense = ws['!data'] || (Array.isArray(ws) ? ws : null);
+  var maxR = -1, maxC = -1;
+  if (dense) {
+    for (var r = 0; r < dense.length; r++) {
+      var row = dense[r];
+      if (!row) continue;
+      for (var c = 0; c < row.length; c++) {
+        var cell = row[c];
+        if (cell && cell.v !== undefined && cell.v !== null && String(cell.v).trim() !== '') { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
+      }
+    }
+  } else {
+    Object.keys(ws).forEach(function (k) {
+      if (k.charAt(0) === '!') return;
+      var a = XLSX.utils.decode_cell(k);
+      if (ws[k].v !== undefined && String(ws[k].v).trim() !== '') { if (a.r > maxR) maxR = a.r; if (a.c > maxC) maxC = a.c; }
+    });
+  }
+  if (maxR < 0) return [];
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.min(maxR, 200000), c: Math.min(maxC, 300) } });
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+}
+function normHead(v) { return String(v == null ? '' : v).toLowerCase().replace(/[\s\r\n]+/g, ''); }
+function isNumLike(v) { var t = String(v == null ? '' : v).replace(/mm/i, '').replace(/,/g, '').trim(); return t !== '' && !isNaN(Number(t)); }
+// Header row = first row (within 40) that has both an X and a Y column
+function findXYHeader(rows) {
+  for (var r = 0; r < Math.min(rows.length, 40); r++) {
+    var h = (rows[r] || []).map(normHead);
+    var x = h.findIndex(function (v) { return /^x(\(mm\)|좌표|coordinate|mm)?$/.test(v); });
+    var y = h.findIndex(function (v) { return /^y(\(mm\)|좌표|coordinate|mm)?$/.test(v); });
+    if (x >= 0 && y >= 0) return { row: r, x: x, y: y };
+  }
+  return null;
+}
+
 self.onmessage = function (e) {
   var msg = e.data;
   if (msg.type === 'genealogy') {
@@ -53,6 +98,31 @@ self.onmessage = function (e) {
     return;
   }
   try {
+    if (msg.type === 'book') {
+      // Any workbook: find sheets that have X / Y columns and count rows with numeric X and Y
+      var bdata = new Uint8Array(msg.buf);
+      var bhandle = null, bnames;
+      try { bhandle = XlsxSubset.openWorkbook(fflate, bdata); bnames = bhandle.names; }
+      catch (zipErr2) { bnames = XLSX.read(bdata, { type: 'array', bookSheets: true }).SheetNames; }
+      book = { handle: bhandle, data: bdata, names: bnames };
+      var heads = readBookSheets(bnames, { dense: true, sheetRows: 40 });
+      var info = bnames.map(function (n) { return { name: n, header: findXYHeader(sheetRows(heads.Sheets[n])) }; });
+      var candidates = info.filter(function (s) { return s.header; }).map(function (s) { return s.name; });
+      var full = candidates.length ? readBookSheets(candidates, { dense: true }) : { Sheets: {} };
+      info.forEach(function (s) {
+        if (!s.header) return;
+        var rows = sheetRows(full.Sheets[s.name]);
+        s.rowCount = rows.length;
+        s.xyCount = rows.slice(s.header.row + 1).filter(function (r) { return isNumLike(r[s.header.x]) && isNumLike(r[s.header.y]); }).length;
+      });
+      self.postMessage({ id: msg.id, ok: true, sheets: info });
+      return;
+    }
+    if (msg.type === 'bookRows') {
+      var rwb2 = readBookSheets([msg.sheet], { dense: true });
+      self.postMessage({ id: msg.id, ok: true, rows: sheetRows(rwb2.Sheets[msg.sheet]) });
+      return;
+    }
     if (msg.type === 'lotstats') {
       var lwb = XLSX.read(new Uint8Array(msg.buf), { type: 'array' });
       var lrows = XLSX.utils.sheet_to_json(lwb.Sheets[lwb.SheetNames[0]], { header: 1, raw: false, defval: '' });

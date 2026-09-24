@@ -83,7 +83,9 @@
 
   // Electrode drawing with foreign-material points: view "plane" (x, y) or "side" (x, layer)
   const ELECTRODE = { xMax: 300, yMax: 210, layers: 37 };
-  function electrodeMap(slide, pres, records, box, view) {
+  // dims: { xMax, yMax, layers, colorFn } — defaults to the E81C electrode (300 x 210 mm, 37 layers)
+  function electrodeMap(slide, pres, records, box, view, dims) {
+    const D = Object.assign({}, ELECTRODE, dims || {});
     const { x, y, w, h } = box;
     const tabW = w * 0.05;
     const body = { x: x + tabW, y, w: w - tabW * 2, h };
@@ -100,9 +102,9 @@
       if (r.x == null) return;
       const yy = view === 'side' ? r.layer : r.y;
       if (yy == null) return;
-      const fx = Math.max(0, Math.min(1, r.x / ELECTRODE.xMax));
-      const fy = view === 'side' ? Math.max(0, Math.min(1, (yy - 1) / (ELECTRODE.layers - 1))) : Math.max(0, Math.min(1, yy / ELECTRODE.yMax));
-      const color = M.elementColor(r.element || 'Unknown');
+      const fx = Math.max(0, Math.min(1, r.x / D.xMax));
+      const fy = view === 'side' ? Math.max(0, Math.min(1, (yy - 1) / Math.max(1, D.layers - 1))) : Math.max(0, Math.min(1, yy / D.yMax));
+      const color = D.colorFn ? D.colorFn(r.element) : M.elementColor(r.element || 'Unknown');
       slide.addShape(pres.shapes.OVAL, { x: body.x + fx * body.w - d / 2, y: body.y + fy * body.h - d / 2, w: d, h: d, fill: { color: r.element ? color : 'FFFFFF' }, line: { color: '262626', width: 0.25 } });
     });
   }
@@ -585,7 +587,7 @@
     return pres;
   }
 
-  const api = { build, DEFAULT_NOTES, HISTORY };
+  const api = { build, DEFAULT_NOTES, HISTORY, W, FONT, helpers: { txt, rect, hline, vline, chrome, panelTitle, vtext, legend, electrodeMap } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LvReportPpt = api;
 })(typeof self !== 'undefined' ? self : this);

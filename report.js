@@ -16,7 +16,7 @@ const data = {
 // ---------------------------------------------------------------------------
 // Worker (shared with the tracker)
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=2');
+const worker = new Worker('worker.js?v=3');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {

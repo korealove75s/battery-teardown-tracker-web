@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Foreign Material Map</title>
+<link rel="stylesheet" href="report.css?v=1" />
+<link rel="stylesheet" href="position-map.css?v=1" />
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="convert.js?v=1"></script>
+<script src="report-model.js?v=1"></script>
+<script src="report-ppt.js?v=2"></script>
+</head>
+<body>
+<header class="app-header">
+  <div>
+    <h1>Foreign Material Map</h1>
+    <p class="sub">Plots foreign-material positions on the cell (top view and side view) from any Excel file that has X and Y columns. Files are read in your browser and are never uploaded.</p>
+  </div>
+  <div class="header-actions">
+    <a class="btn btn-ghost" href="./">← Battery Teardown Tracker</a>
+    <button class="btn btn-danger" id="resetBtn" type="button">Reset</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="step-head"><span class="step-num">1</span><h2>Excel file</h2></div>
+    <label class="dropzone" id="drop">
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls,.csv" hidden />
+      <span class="drop-main">Drop an Excel / CSV file here, or click to choose</span>
+      <span class="hint">e.g. "SDR Return Cell OCV TRACKING" (Tear Down Analysis: Anode Top/Back, X, Y) — any sheet with X and Y columns works</span>
+    </label>
+    <div class="file-status" id="fileStatus"></div>
+    <div id="mapping" hidden>
+      <div class="settings-grid">
+        <label class="field">Sheet <select id="sheetSel"></select></label>
+        <label class="field">Cell ID <select data-col="id"></select></label>
+        <label class="field">X (mm) <select data-col="x"></select></label>
+        <label class="field">Y (mm) <select data-col="y"></select></label>
+        <label class="field">Top / Back <select data-col="topBack"></select></label>
+        <label class="field">Layer (side view) <select data-col="layer"></select></label>
+        <label class="field">Foreign material <select data-col="element"></select></label>
+        <label class="field">LOT <select data-col="lot"></select></label>
+      </div>
+      <div class="file-status" id="pointStatus"></div>
+    </div>
+  </section>
+
+  <section class="card" id="settingsCard" hidden>
+    <div class="step-head"><span class="step-num">2</span><h2>Cell size and filters</h2></div>
+    <div class="settings-grid">
+      <label class="field">Preset <select id="preset"><option value="E81C">E81C (300 × 210 mm, 37 layers)</option><option value="custom">Custom</option></select></label>
+      <label class="field">Width X (mm) <input type="number" id="dimW" value="300" min="1" /></label>
+      <label class="field">Height Y (mm) <input type="number" id="dimH" value="210" min="1" /></label>
+      <label class="field">Anode layers <input type="number" id="dimL" value="37" min="2" /></label>
+      <label class="field">Top / Back <select id="fTB"><option value="all">All</option><option value="Top">Top only</option><option value="Back">Back only</option></select></label>
+      <label class="field">Search Cell ID / LOT <input type="search" id="fSearch" placeholder="e.g. IFDE or FD14" /></label>
+    </div>
+    <div class="chip-row" id="elementChips"></div>
+  </section>
+
+  <section class="card" id="viewCard" hidden>
+    <div class="view-head">
+      <div class="tabs">
+        <button class="tab active" data-view="cumulative" type="button">Cumulative</button>
+        <button class="tab" data-view="individual" type="button">One cell at a time</button>
+      </div>
+      <div class="export">
+        <label class="field inline">Title <input type="text" id="pptTitle" /></label>
+        <label class="field inline">Team <input type="text" id="pptTeam" value="ESHG 품질팀" /></label>
+        <label class="field inline">Date <input type="text" id="pptDate" /></label>
+        <button class="btn btn-primary" id="pptBtn" type="button">Download PPTX</button>
+      </div>
+    </div>
+    <div id="cumulativeView"></div>
+    <div id="individualView" hidden></div>
+  </section>
+</main>
+
+<div class="modal-overlay" id="resetOverlay">
+  <div class="modal">
+    <h2>Reset</h2>
+    <p>This unloads the file and clears the column choices and filters on this page.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="resetCancelBtn" type="button">Cancel</button>
+      <button class="btn btn-danger" id="resetConfirmBtn" type="button">Reset</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="zoomOverlay">
+  <div class="modal zoom-modal" id="zoomBody"></div>
+</div>
+<div class="busy" id="busy" hidden><div class="busy-box"><div class="spinner"></div><span id="busyText">Working…</span></div></div>
+<div class="toast" id="toast"></div>
+<script src="position-map.js?v=1"></script>
+</body>
+</html>

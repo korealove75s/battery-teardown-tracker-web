@@ -73,3 +73,14 @@ The page builds the weekly "E81C 양산랏 저전압 현황" deck: 9 A4 slides w
 
 Slides: 1 monthly trend with improvement notes, 2 five-analysis results, 3–4 foreign-material locations, 5 coating-top AZS/DNC, 6–7 cathode/anode electrode lots, 8 cumulative results, 9 C4~SOP history (static data from the original deck).
 Improvement notes and headline sentences can be edited on the page. The code is in `report-model.js` (numbers) and `report-ppt.js` (layout).
+
+## Foreign material map (position-map.html)
+
+https://sangnew.github.io/battery-teardown-tracker-web/position-map.html (tracker header: **Foreign material map**)
+
+Load any Excel/CSV file with X and Y columns. For example, the SDR Return Cell OCV Tracking file's *3. Tear Down Analysis* columns (Anode Top/Back, X, Y) plus Anode Sheet for the layer. The page finds the sheet and the columns automatically, and every column can be changed by hand.
+
+- **Cumulative:** all cells, Top only and Back only (top view + side view), plus one panel per foreign material.
+- **One cell at a time:** one card per Cell ID with its own top view and side view. Click a card to enlarge it.
+- **Filters:** Top/Back, foreign material (click the chips), and Cell ID / LOT search. Cell size is adjustable (E81C preset: 300 × 210 mm, 37 layers).
+- **Download PPTX:** cumulative, per-material, and per-cell slides (6 cells per slide), drawn with the same cell shape as the weekly report.
