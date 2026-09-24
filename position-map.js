@@ -21,7 +21,7 @@ const state = {
 // ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=5');
+const worker = new Worker('worker.js?v=6');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {

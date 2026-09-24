@@ -3,7 +3,7 @@ importScripts(
   'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
   'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js',
   'xlsx-subset.js?v=1',
-  'convert.js?v=3',
+  'convert.js?v=4',
   'report-model.js?v=3'
 );
 

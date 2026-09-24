@@ -135,6 +135,8 @@
       if (!id) continue;
       var rec = { row: r + 1, trackingSheet: sheetSet[id.toUpperCase()] || null };
       Object.keys(c).forEach(function (f) { rec[f] = text(row[c[f]]); });
+      // "FH1" and "FH01" are the same lot: always use the two-digit form so lots group and sort together
+      if (rec.lot) rec.lot = padLot(rec.lot.toUpperCase());
       rec.idColor = fillAt ? fillHex(fillAt(r, c.cellId)) : '';
       rec.ocvTrackingFilled = anyFilled(row, sections.ocvTracking);
       rec.tearDownFilled = anyFilled(row, sections.tearDown);

@@ -1411,7 +1411,7 @@ let ocvSeq = 0;
 const ocvPending = new Map();
 function callOcvWorker(msg, transfer) {
   if (!ocvWorker) {
-    ocvWorker = new Worker('worker.js?v=5');
+    ocvWorker = new Worker('worker.js?v=6');
     ocvWorker.onmessage = (e) => {
       const p = ocvPending.get(e.data.id);
       if (!p) return;
@@ -1662,7 +1662,8 @@ function exportAnalysisReport() {
 // ---------------------------------------------------------------------------
 // Filters
 // ---------------------------------------------------------------------------
-function uniqueValues(key) { return [...new Set(state.cells.map((c) => c[key]).filter((v) => v && v.trim()))].sort(); }
+// Number-aware order so "FH2" comes before "FH10" even when lots are not zero-padded
+function uniqueValues(key) { return [...new Set(state.cells.map((c) => c[key]).filter((v) => v && v.trim()))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); }
 function fillSelect(sel, values) {
   const current = sel.value;
   const firstOption = sel.options[0];
