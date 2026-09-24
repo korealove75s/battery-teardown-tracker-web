@@ -42,3 +42,18 @@ After sign-in, if the browser still has data saved by the old version, a yellow 
 ```
 npx serve web
 ```
+
+## Importing from the OCV tracking workbook (Frozen IR · Spot Analysis tab)
+
+The former "OCV Report Builder" site is now part of this tab
+(https://sangnew.github.io/ocv-report-builder-web/ redirects here).
+
+1. Open the **Frozen IR · Spot Analysis** tab and click **Import OCV workbook**.
+2. Choose the *Mass Production E&L Grade OCV Tracking Sheet* .xlsx. It is read in the browser and never uploaded.
+3. Pick LOTs and click **Import**. Rows are added or updated by Cell ID:
+   - New cells are added with the values found in the workbook.
+   - For existing cells, blank fields are filled, and fields that still hold the previous import's value are refreshed. **Values the team edited are kept.**
+4. Cells that still need manual input are highlighted **yellow**. **Light blue** means the tracking-sheet analysis disagrees with Master E & L, so please verify it. Hover a cell to see where its value came from. Use **Needs input only** (or the ⚠ chip) to list the rows left to fill in.
+5. **Export Excel** on this tab writes the report layout (headers on row 2, No. in column B), keeps the highlights, and adds a Legend sheet.
+
+Voltage drop rule: for each layer (column B) of the cell's own tracking sheet, dOCV = the largest fall between the tracking dates in C/D/E. A cell is **Drop** when one inner layer is more than 2.6σ above the others (the sheet's R6 formula) **and** that fall is at least 1.5 mV (adjustable in the import dialog). Otherwise it is **NTF**. The conversion rules are in `convert.js`.

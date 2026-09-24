@@ -271,3 +271,34 @@ th.col-sticky-1, th.col-sticky-2 { z-index: 8; }
 }
 .migrate-banner[hidden] { display: none; }
 .migrate-banner span { flex: 1; min-width: 220px; }
+
+/* OCV workbook import + input highlights (Frozen IR · Spot Analysis tab) */
+.needs-input-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+.needs-input-toggle[hidden] { display: none; }
+.ocv-drop {
+  display: flex; align-items: center; justify-content: center; padding: 26px 16px; margin-top: 4px;
+  border: 2px dashed var(--border-strong); border-radius: 10px; background: var(--panel-2); cursor: pointer; text-align: center;
+}
+.ocv-drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+.ocv-status { margin-top: 10px; padding: 9px 12px; border-radius: 8px; background: var(--panel-2); font-size: 12.5px; line-height: 1.5; }
+.ocv-status.error { background: var(--danger-soft); color: var(--danger); }
+.ocv-status[hidden] { display: none; }
+.ocv-lot-actions { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; font-size: 12.5px; flex-wrap: wrap; }
+.ocv-lot-actions label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.ocv-lot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; max-height: 220px; overflow: auto; }
+.ocv-lot { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; cursor: pointer; user-select: none; }
+.ocv-lot.on { border-color: var(--accent); background: var(--accent-soft); }
+.ocv-lot.empty { opacity: .45; }
+.ocv-lot b { font-family: var(--mono); }
+.ocv-lot small { margin-left: auto; color: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+.ocv-setting { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; }
+.ocv-setting input { width: 70px; }
+.main-table td.ocv-missing { background: #fff176 !important; box-shadow: inset 0 0 0 1px #e0b800; }
+.main-table td.ocv-calc { background: #d6e8fa !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .main-table td.ocv-missing { background: #5c5210 !important; box-shadow: inset 0 0 0 1px #c9a916; }
+  :root:not([data-theme="light"]) .main-table td.ocv-calc { background: #1b3550 !important; }
+}
+:root[data-theme="dark"] .main-table td.ocv-missing { background: #5c5210 !important; box-shadow: inset 0 0 0 1px #c9a916; }
+:root[data-theme="dark"] .main-table td.ocv-calc { background: #1b3550 !important; }
+.stat-chip.needs-input { background: #fff6c2; border-color: #e0b800; color: #5c4700; cursor: pointer; }

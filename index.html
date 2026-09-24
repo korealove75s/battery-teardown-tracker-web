@@ -4,12 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Battery Teardown Tracker</title>
-<link rel="stylesheet" href="styles.css?v=6" />
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="styles.css?v=7" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=6"></script>
+<script src="convert.js?v=1"></script>
 </head>
 <body>
 <header class="app-header">
@@ -41,9 +42,11 @@
   <div class="toolbar-group filters">
     <span class="toolbar-group" id="filterSelects"></span>
     <input type="text" id="filterDate" placeholder="TD Date contains..." />
+    <label class="needs-input-toggle" id="needsInputWrap" hidden><input type="checkbox" id="needsInputOnly" /> Needs input only</label>
     <button id="clearFiltersBtn" class="btn btn-ghost">Clear filters</button>
   </div>
   <div class="toolbar-group actions">
+    <button id="ocvImportBtn" class="btn btn-primary" hidden>Import OCV workbook</button>
     <button id="newRecordBtn" class="btn btn-primary">+ New record</button>
     <input type="number" id="addRowCount" value="1" min="1" max="1000" title="Number of blank rows to add" style="width:64px" />
     <button id="addRowBtn" class="btn btn-secondary">+ Add blank rows</button>
@@ -79,6 +82,39 @@
     </form>
     <div class="modal-footer">
       <button class="btn btn-primary" id="loginBtn" type="submit" form="loginForm">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<!-- OCV workbook import (Frozen IR · Spot Analysis tab) -->
+<div class="modal-overlay" id="ocvModalOverlay">
+  <div class="modal modal-import">
+    <div class="modal-header">
+      <h2>Import from the OCV tracking workbook</h2>
+      <button class="modal-close" id="ocvModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="login-text">Reads the <b>Mass Production E&amp;L Grade OCV Tracking Sheet</b> in your browser (the file is not uploaded) and adds or updates rows in this tab by Cell ID. Values the team already edited are kept. Cells that still need manual input are highlighted yellow.</p>
+      <label class="ocv-drop" id="ocvDrop">
+        <input type="file" id="ocvFileInput" accept=".xlsx,.xlsm,.xls" hidden />
+        <span class="ocv-drop-main">Drop the <b>.xlsx</b> file here, or click to choose</span>
+      </label>
+      <div class="ocv-status" id="ocvStatus" hidden></div>
+      <div id="ocvOptions" hidden>
+        <div class="ocv-lot-actions">
+          <button class="btn btn-ghost" id="ocvLotsNone" type="button">Clear</button>
+          <label><input type="checkbox" id="ocvOnlyWithSheet" checked /> Only cells that have their own OCV tracking sheet</label>
+        </div>
+        <div class="ocv-lot-grid" id="ocvLotGrid"></div>
+        <label class="ocv-setting">Drop = a layer more than 2.6σ above the others <b>and</b> at least
+          <input type="number" id="ocvMinDrop" min="0" step="0.1" value="1.5" /> mV</label>
+        <p class="field-hint">Voltage drop is analyzed from each cell's tracking sheet: per layer (column B), dOCV = the biggest fall between the tracking dates in C, D and E. The 2.6σ test is the same as the sheet's R6 formula; the mV minimum filters out tiny drops.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="dup-warning" id="ocvSelHint"></span>
+      <button class="btn btn-ghost" id="ocvCancelBtn" type="button">Cancel</button>
+      <button class="btn btn-primary" id="ocvImportConfirm" type="button" disabled>Import</button>
     </div>
   </div>
 </div>
@@ -180,6 +216,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

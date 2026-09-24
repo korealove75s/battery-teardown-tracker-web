@@ -728,6 +728,17 @@ function renderStats() {
     if (!v) return;
     counts.set(v, (counts.get(v) || 0) + 1);
   });
+  if (activeSheetKey === 'analysis') {
+    const needs = state.cells.filter(ocvNeedsInput).length;
+    if (needs) {
+      const chip = document.createElement('span');
+      chip.className = 'stat-chip needs-input';
+      chip.title = 'Show only rows that need input';
+      chip.innerHTML = `⚠ Needs input <b>${needs}</b>`;
+      chip.onclick = () => { const cb = document.getElementById('needsInputOnly'); cb.checked = true; cb.dispatchEvent(new Event('change')); };
+      row.insertBefore(chip, row.querySelector('.paste-hint'));
+    }
+  }
   [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).forEach(([status, n]) => {
     const chip = document.createElement('span');
     chip.className = 'stat-chip';
@@ -761,6 +772,7 @@ function getFilteredCells() {
     if (f.search && !(c.cellId || '').toLowerCase().includes(f.search.toLowerCase())) return false;
     for (const [key, val] of Object.entries(f.sel)) { if (val && c[key] !== val) return false; }
     if (SHEET.dateKey && f.date && !(c[SHEET.dateKey] || '').toLowerCase().includes(f.date.toLowerCase())) return false;
+    if (f.needsInput && !ocvNeedsInput(c)) return false;
     return true;
   });
 }
@@ -835,6 +847,7 @@ function createRowElement(cell, preserve) {
   actions.appendChild(delBtn);
   actionsTd.appendChild(actions);
   tr.appendChild(actionsTd);
+  applyOcvHighlights(tr, cell);
   return tr;
 }
 function renderImagesCell(cell) {
@@ -893,7 +906,8 @@ async function handleCellChange(e) {
   cell[field] = value;
   try {
     await updateCell(id, { [field]: value });
-    if (field === SHEET.statusKey) renderStats();
+    if (field === SHEET.statusKey || cell.ocv) renderStats();
+    applyOcvHighlights(tr, cell);
     if (SHEET.filters.some(([k]) => k === field)) populateFilterOptions();
     if (field === 'cellId') {
       const dup = state.cells.filter((c) => c.id !== cell.id && (c.cellId || '').trim().toLowerCase() === value.trim().toLowerCase() && value.trim());
@@ -1373,10 +1387,276 @@ function exportCsv() {
   downloadBlob(csv, `${SHEET.exportName}-${dateStamp()}.csv`, 'text/csv;charset=utf-8;');
 }
 function exportXlsx() {
+  if (activeSheetKey === 'analysis') { exportAnalysisReport(); return; }
   const ws = XLSX.utils.json_to_sheet(buildExportRows(), { header: COLUMNS.map((c) => c.label) });
   const wbx = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wbx, ws, SHEET.sheetName);
   XLSX.writeFile(wbx, `${SHEET.exportName}-${dateStamp()}.xlsx`);
+}
+
+// ---------------------------------------------------------------------------
+// OCV tracking workbook import (Frozen IR · Spot Analysis tab)
+// Rows are added or updated by Cell ID. Each imported row keeps its auto-filled values in
+// rec.ocv.auto, so a later import only overwrites fields the team has not edited.
+// ---------------------------------------------------------------------------
+const OcvC = window.OcvConvert;
+// convert.js column key -> Analysis tab field
+const OCV_FIELD = { frozenPf: 'frozenIrPf', layer: 'droppedLayer', spot: 'spotFound', sem: 'semEds' };
+const ocvField = (k) => OCV_FIELD[k] || k;
+const OCV_KEYS = OcvC ? OcvC.COLUMNS.map((c) => c.key) : [];
+const ocvState = { source: null, lots: new Set() };
+
+let ocvWorker = null;
+let ocvSeq = 0;
+const ocvPending = new Map();
+function callOcvWorker(msg, transfer) {
+  if (!ocvWorker) {
+    ocvWorker = new Worker('worker.js?v=1');
+    ocvWorker.onmessage = (e) => {
+      const p = ocvPending.get(e.data.id);
+      if (!p) return;
+      ocvPending.delete(e.data.id);
+      e.data.ok ? p.resolve(e.data) : p.reject(new Error(e.data.error));
+    };
+    ocvWorker.onerror = (e) => {
+      console.error(e);
+      ocvPending.forEach((p) => p.reject(new Error('The file reader failed to start. Check your internet connection and reload.')));
+      ocvPending.clear();
+    };
+  }
+  return new Promise((resolve, reject) => {
+    const id = ++ocvSeq;
+    ocvPending.set(id, { resolve, reject });
+    ocvWorker.postMessage(Object.assign({ id }, msg), transfer || []);
+  });
+}
+
+// Which Analysis fields of an imported row still need input, and which auto values to verify
+function ocvRowStatus(cell) {
+  if (!cell.ocv || !OcvC) return null;
+  const values = {};
+  OCV_KEYS.forEach((k) => { values[k] = (cell[ocvField(k)] || '').trim(); });
+  const missing = new Set(OcvC.requiredKeys(values).filter((k) => !values[k]).map(ocvField));
+  const verify = new Set();
+  const src = cell.ocv.src || {};
+  const auto = cell.ocv.auto || {};
+  Object.keys(src).forEach((f) => { if (src[f] === 'calc' && cell[f] && cell[f] === auto[f]) verify.add(f); });
+  return { missing, verify };
+}
+function ocvCellTitle(cell, field) {
+  if (!cell.ocv) return '';
+  const auto = cell.ocv.auto || {};
+  const src = (cell.ocv.src || {})[field];
+  const note = (cell.ocv.note || {})[field];
+  if (!cell[field] || cell[field] !== auto[field]) return '';
+  const base = { master: 'From Master E & L', sheet: 'From the OCV tracking sheet', calc: 'Tracking sheet and Master disagree — please verify' }[src] || '';
+  return [base, note && note !== base ? note : ''].filter(Boolean).join(' — ');
+}
+// Apply highlight classes / tooltips to one rendered row of the Analysis tab
+function applyOcvHighlights(tr, cell) {
+  if (activeSheetKey !== 'analysis') return;
+  const status = ocvRowStatus(cell);
+  tr.querySelectorAll('[data-field]').forEach((input) => {
+    const td = input.closest('td');
+    const f = input.dataset.field;
+    td.classList.toggle('ocv-missing', !!(status && status.missing.has(f)));
+    td.classList.toggle('ocv-calc', !!(status && status.verify.has(f)));
+    const title = status ? (status.missing.has(f) ? 'Needs manual input' : ocvCellTitle(cell, f)) : '';
+    if (title) input.title = title; else input.removeAttribute('title');
+  });
+}
+function ocvNeedsInput(cell) {
+  const s = ocvRowStatus(cell);
+  return !!(s && s.missing.size);
+}
+
+function openOcvModal() {
+  document.getElementById('ocvModalOverlay').classList.add('open');
+  renderOcvOptions();
+}
+function closeOcvModal() { document.getElementById('ocvModalOverlay').classList.remove('open'); }
+function setOcvStatus(html, isError) {
+  const el = document.getElementById('ocvStatus');
+  el.hidden = !html;
+  el.className = 'ocv-status' + (isError ? ' error' : '');
+  el.innerHTML = html || '';
+}
+async function loadOcvWorkbook(file) {
+  if (!file) return;
+  setOcvStatus(`Reading "${escapeHtml(file.name)}"…`);
+  document.getElementById('ocvOptions').hidden = true;
+  try {
+    const buf = await file.arrayBuffer();
+    const res = await callOcvWorker({ type: 'source', buf }, [buf]);
+    if (!res.cells.length) throw new Error('No cell rows were found in the Master sheet.');
+    ocvState.source = { fileName: file.name, cells: res.cells, lots: res.lots };
+    ocvState.lots.clear();
+    const warn = res.missingHeaders.length ? `<br/>⚠ Columns not found in the Master sheet (left for manual input): ${escapeHtml(res.missingHeaders.join(', '))}` : '';
+    setOcvStatus(`Loaded <b>${escapeHtml(file.name)}</b> — ${res.cells.length} cells in "${escapeHtml(res.masterName)}", ${res.sheetCount} sheets. Choose LOTs:${warn}`);
+    document.getElementById('ocvOptions').hidden = false;
+    renderOcvOptions();
+  } catch (err) {
+    console.error(err);
+    ocvState.source = null;
+    setOcvStatus(`Could not read this file: ${escapeHtml(err.message)}`, true);
+  }
+}
+function ocvSelectedCells() {
+  if (!ocvState.source) return [];
+  const onlyWithSheet = document.getElementById('ocvOnlyWithSheet').checked;
+  return ocvState.source.cells.filter((c) => ocvState.lots.has(c.lot || '(no LOT)') && (!onlyWithSheet || c.trackingSheet));
+}
+function renderOcvOptions() {
+  const grid = document.getElementById('ocvLotGrid');
+  if (!ocvState.source) { grid.innerHTML = ''; updateOcvHint(); return; }
+  const onlyWithSheet = document.getElementById('ocvOnlyWithSheet').checked;
+  grid.innerHTML = '';
+  ocvState.source.lots.forEach((l) => {
+    const count = onlyWithSheet ? l.withSheet : l.total;
+    const el = document.createElement('label');
+    el.className = 'ocv-lot' + (ocvState.lots.has(l.lot) ? ' on' : '') + (count ? '' : ' empty');
+    el.innerHTML = `<input type="checkbox" ${ocvState.lots.has(l.lot) ? 'checked' : ''} /> <b>${escapeHtml(l.lot)}</b><small>${count}</small>`;
+    el.querySelector('input').onchange = (e) => {
+      if (e.target.checked) ocvState.lots.add(l.lot); else ocvState.lots.delete(l.lot);
+      el.classList.toggle('on', e.target.checked);
+      updateOcvHint();
+    };
+    grid.appendChild(el);
+  });
+  updateOcvHint();
+}
+function updateOcvHint() {
+  const cells = ocvSelectedCells();
+  const existing = new Set(state.data.analysis.map((r) => (r.cellId || '').trim().toUpperCase()));
+  const upd = cells.filter((c) => existing.has(c.cellId.toUpperCase())).length;
+  document.getElementById('ocvImportConfirm').disabled = !cells.length;
+  document.getElementById('ocvSelHint').textContent = cells.length
+    ? `${cells.length} cell${cells.length === 1 ? '' : 's'}: ${cells.length - upd} new, ${upd} already in this tab`
+    : (ocvState.source ? 'Select one or more LOTs' : '');
+}
+async function runOcvImport() {
+  const cells = ocvSelectedCells();
+  if (!cells.length) return;
+  const btn = document.getElementById('ocvImportConfirm');
+  btn.disabled = true;
+  const minMv = Number(document.getElementById('ocvMinDrop').value);
+  const minDropV = isFinite(minMv) && minMv >= 0 ? minMv / 1000 : OcvC.DEFAULT_MIN_DROP_V;
+  try {
+    const withSheet = cells.filter((c) => c.trackingSheet);
+    setOcvStatus(`Analyzing ${withSheet.length} OCV tracking sheets…`);
+    const res = await callOcvWorker({ type: 'tracking', sheets: withSheet.map((c) => c.trackingSheet) });
+    const importedAt = new Date().toISOString();
+    const byId = new Map();
+    state.data.analysis.forEach((r) => { const k = (r.cellId || '').trim().toUpperCase(); if (k && !byId.has(k)) byId.set(k, r); });
+    const creations = [];
+    const updates = [];
+    let keptEdits = 0;
+    cells.forEach((cell) => {
+      const built = OcvC.buildRow(cell, cell.trackingSheet ? res.analysis[cell.trackingSheet] : null, { minDropV });
+      const auto = {}, src = {}, note = {};
+      OCV_KEYS.forEach((k) => {
+        const f = ocvField(k);
+        auto[f] = built[k].value;
+        src[f] = built[k].source;
+        if (built[k].note) note[f] = built[k].note;
+      });
+      const ocv = { auto, src, note, file: ocvState.source.fileName, importedAt, minDropV };
+      const existing = byId.get(cell.cellId.toUpperCase());
+      if (!existing) {
+        const fields = { ocv };
+        Object.keys(auto).forEach((f) => { if (auto[f]) fields[f] = auto[f]; });
+        creations.push(fields);
+        return;
+      }
+      const prevAuto = (existing.ocv && existing.ocv.auto) || {};
+      const fields = { ocv };
+      Object.keys(auto).forEach((f) => {
+        const cur = (existing[f] || '').trim();
+        if (!auto[f] || cur === auto[f]) return;
+        // Fill blanks and refresh values that still equal the previous import; keep the team's edits
+        if (cur === '' || (Object.prototype.hasOwnProperty.call(prevAuto, f) && cur === prevAuto[f])) fields[f] = auto[f];
+        else keptEdits++;
+      });
+      updates.push({ id: existing.id, fields });
+    });
+    setOcvStatus('Saving…');
+    if (creations.length) await createCells(creations);
+    if (updates.length) await updateCells(updates);
+    populateFilterOptions();
+    renderStats();
+    renderTable();
+    closeOcvModal();
+    const needs = state.data.analysis.filter(ocvNeedsInput).length;
+    showToast(`Imported ${cells.length} cells (${creations.length} new, ${updates.length} updated${keptEdits ? `, ${keptEdits} edited value(s) kept` : ''}). ${needs} row(s) need input.`);
+  } catch (err) {
+    console.error(err);
+    setOcvStatus('Import failed: ' + escapeHtml(err.message), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Excel export for the Analysis tab in the report layout (headers on row 2, No. in column B,
+// yellow = needs input, light blue = verify), plus a Legend sheet.
+const OCV_NUMERIC = new Set(['docv', 'frozenIr', 'droppedLayer', 'docvV', 'x', 'y', 'longSide', 'shortSide', 'height']);
+function exportAnalysisReport() {
+  const rows = getFilteredCells();
+  const THIN = { style: 'thin', color: { rgb: 'BFBFBF' } };
+  const BORDER = { top: THIN, bottom: THIN, left: THIN, right: THIN };
+  const FILL_MISSING = { patternType: 'solid', fgColor: { rgb: 'FFFF00' } };
+  const FILL_CALC = { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } };
+  const ws = {};
+  const put = (r, c, v, s) => {
+    const cell = v === '' || v == null ? { t: 's', v: '' } : (typeof v === 'number' ? { t: 'n', v } : { t: 's', v: String(v) });
+    if (s) cell.s = s;
+    ws[XLSX.utils.encode_cell({ r, c })] = cell;
+  };
+  put(1, 1, '', { fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } }, border: BORDER });
+  COLUMNS.forEach((col, i) => put(1, i + 2, col.label, { font: { bold: true }, border: BORDER, alignment: { wrapText: true, vertical: 'center' } }));
+  rows.forEach((cell, ri) => {
+    const r = ri + 2;
+    const status = ocvRowStatus(cell);
+    put(r, 1, ri + 1, { border: BORDER });
+    COLUMNS.forEach((col, i) => {
+      let v = (cell[col.key] || '').trim();
+      if (v && OCV_NUMERIC.has(col.key) && !isNaN(Number(v))) v = Number(v);
+      const style = { border: BORDER };
+      if (status && status.missing.has(col.key)) style.fill = FILL_MISSING;
+      else if (status && status.verify.has(col.key)) style.fill = FILL_CALC;
+      put(r, i + 2, v, style);
+    });
+  });
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 1, c: 1 }, e: { r: Math.max(rows.length, 1) + 1, c: COLUMNS.length + 1 } });
+  ws['!cols'] = [{ wch: 2 }, { wch: 5 }].concat(COLUMNS.map((c) => ({ wch: c.key === 'cellId' ? 13 : Math.max(8, Math.min(26, c.label.length + 2)) })));
+
+  const imports = rows.map((c) => c.ocv).filter(Boolean);
+  const last = imports.sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))[0];
+  const legend = XLSX.utils.aoa_to_sheet([
+    ['Legend'],
+    ['Yellow', 'Needs manual input (not found in the OCV tracking workbook)'],
+    ['Light blue', 'Voltage drop from the OCV tracking sheet disagrees with Master E & L — please verify'],
+    ['Voltage drop', `Per layer dOCV = biggest fall between the tracking dates (C, D, E). Drop = a layer > 2.6σ above the others and ≥ ${last ? (last.minDropV * 1000).toFixed(1) : '1.5'} mV; otherwise NTF.`],
+    ['Frozen IR P/F', 'NG when Frozen IR < 35 MΩ, OK otherwise (when Master E & L has no result)'],
+    [],
+    ['Source file', last ? last.file : '(rows entered by hand)'],
+    ['Downloaded', new Date().toLocaleString()],
+  ]);
+  legend.A1.s = { font: { bold: true } };
+  legend.A2.s = { fill: FILL_MISSING };
+  legend.A3.s = { fill: FILL_CALC };
+  legend['!cols'] = [{ wch: 16 }, { wch: 110 }];
+
+  const lots = [...new Set(rows.map((c) => (c.lot || '').trim()).filter(Boolean))].sort((a, b) => OcvC.lotSortKey(a).localeCompare(OcvC.lotSortKey(b)));
+  const d = new Date();
+  const stamp = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  const range = !lots.length ? 'Analysis' : lots.length === 1 ? OcvC.padLot(lots[0]) : `${OcvC.padLot(lots[0])}~${OcvC.padLot(lots[lots.length - 1])}`;
+  const sheetName = `${stamp} ${range}`.replace(/[\[\]:*?\/\\]/g, '-').slice(0, 31);
+  const wbx = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wbx, ws, sheetName);
+  XLSX.utils.book_append_sheet(wbx, legend, 'Legend');
+  XLSX.writeFile(wbx, `${sheetName}.xlsx`);
+  const remaining = rows.reduce((n, c) => { const s = ocvRowStatus(c); return n + (s ? s.missing.size : 0); }, 0);
+  showToast(remaining ? `Downloaded. ${remaining} highlighted cell(s) still need input.` : 'Downloaded.');
 }
 
 // ---------------------------------------------------------------------------
@@ -1404,6 +1684,10 @@ function buildFilterControls() {
     wrap.appendChild(sel);
   });
   document.getElementById('filterDate').hidden = !SHEET.dateKey;
+  const isAnalysis = activeSheetKey === 'analysis';
+  document.getElementById('needsInputWrap').hidden = !isAnalysis;
+  document.getElementById('ocvImportBtn').hidden = !isAnalysis;
+  document.getElementById('needsInputOnly').checked = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1507,6 +1791,7 @@ function init() {
   document.getElementById('filterDate').oninput = debounce((e) => { state.filters.date = e.target.value; renderTable(); }, 200);
   document.getElementById('clearFiltersBtn').onclick = () => {
     state.filters = { search: '', date: '', sel: {} };
+    document.getElementById('needsInputOnly').checked = false;
     document.getElementById('searchInput').value = '';
     document.querySelectorAll('#filterSelects select').forEach((sel) => { sel.value = ''; });
     document.getElementById('filterDate').value = '';
@@ -1521,6 +1806,18 @@ function init() {
     catch (err) { console.error(err); showToast('An error occurred while importing.', true); }
   });
   document.getElementById('exportCsvBtn').onclick = exportCsv;
+
+  document.getElementById('needsInputOnly').addEventListener('change', (e) => { state.filters.needsInput = e.target.checked; renderTable(); });
+  document.getElementById('ocvImportBtn').onclick = openOcvModal;
+  wireModalClose('ocvModalOverlay', ['ocvModalClose', 'ocvCancelBtn']);
+  const ocvDrop = document.getElementById('ocvDrop');
+  document.getElementById('ocvFileInput').addEventListener('change', (e) => { loadOcvWorkbook(e.target.files[0]); e.target.value = ''; });
+  ['dragenter', 'dragover'].forEach((t) => ocvDrop.addEventListener(t, (e) => { e.preventDefault(); ocvDrop.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach((t) => ocvDrop.addEventListener(t, (e) => { e.preventDefault(); ocvDrop.classList.remove('drag'); }));
+  ocvDrop.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) loadOcvWorkbook(f); });
+  document.getElementById('ocvOnlyWithSheet').addEventListener('change', renderOcvOptions);
+  document.getElementById('ocvLotsNone').onclick = () => { ocvState.lots.clear(); renderOcvOptions(); };
+  document.getElementById('ocvImportConfirm').onclick = runOcvImport;
   document.getElementById('exportXlsxBtn').onclick = exportXlsx;
 
   document.getElementById('resetBtn').onclick = openResetModal;
