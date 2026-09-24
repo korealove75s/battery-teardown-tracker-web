@@ -82,5 +82,5 @@ Load any Excel/CSV file with X and Y columns. For example, the SDR Return Cell O
 
 - **Cumulative:** all cells, Top only and Back only (top view + side view), plus one panel per foreign material.
 - **One cell at a time:** one card per Cell ID with its own top view and side view. Click a card to enlarge it.
-- **Filters:** Top/Back, foreign material (click the chips), and Cell ID / LOT search. Cell size is adjustable (E81C preset: 300 × 210 mm, 37 layers).
+- **Filters:** Top/Back, foreign material (click the chips), and Cell ID / LOT search. Cell size is adjustable (E81C preset: X 0–320 mm, Y 0–98 mm, 37 layers; origin (0, 0) at the bottom-left corner of the top view).
 - **Download PPTX:** cumulative, per-material, and per-cell slides (6 cells per slide), drawn with the same cell shape as the weekly report.

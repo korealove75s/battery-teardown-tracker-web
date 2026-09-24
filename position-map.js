@@ -49,7 +49,7 @@ function norm(v) { return String(v == null ? '' : v).toLowerCase().replace(/[\s\
 function numOf(v) { const t = String(v == null ? '' : v).replace(/mm/i, '').replace(/,/g, '').trim(); const n = Number(t); return t !== '' && isFinite(n) ? n : null; }
 function today() { const d = new Date(); return `${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; }
 function dims() {
-  return { xMax: Math.max(1, Number($('dimW').value) || 300), yMax: Math.max(1, Number($('dimH').value) || 210), layers: Math.max(2, Number($('dimL').value) || 37) };
+  return { xMax: Math.max(1, Number($('dimW').value) || 320), yMax: Math.max(1, Number($('dimH').value) || 98), layers: Math.max(2, Number($('dimL').value) || 37) };
 }
 const colorOf = (el) => (el ? state.colors[el] || 'A6A6A6' : 'FFFFFF');
 
@@ -210,11 +210,14 @@ function renderChips() {
 // ---------------------------------------------------------------------------
 // SVG drawing — same cell shape as the PowerPoint (tab, grey electrode, orange tab; side view stripes)
 // ---------------------------------------------------------------------------
+// Top view: origin (0, 0) at the bottom-left corner, drawn at the cell's real X:Y proportion.
 function cellSvg(points, view, opts) {
   const o = Object.assign({ w: 520, h: 220, dot: 7 }, opts);
   const d = dims();
   const tabW = o.w * 0.05;
-  const bx = tabW, bw = o.w - tabW * 2, by = 0, bh = o.h;
+  const bx = tabW, bw = o.w - tabW * 2, by = 0;
+  if (view !== 'side') o.h = Math.round(bw / (d.xMax / d.yMax));
+  const bh = o.h;
   // Padding so dots on the very edge of the cell stay fully visible
   const pad = o.dot + 1;
   let s = `<svg viewBox="${-pad} ${-pad} ${o.w + pad * 2} ${o.h + pad * 2}" xmlns="http://www.w3.org/2000/svg" role="img">`;
@@ -232,7 +235,7 @@ function cellSvg(points, view, opts) {
     const yv = view === 'side' ? p.layer : p.y;
     if (yv == null) return;
     const fx = Math.max(0, Math.min(1, p.x / d.xMax));
-    const fy = view === 'side' ? Math.max(0, Math.min(1, (yv - 1) / (d.layers - 1))) : Math.max(0, Math.min(1, yv / d.yMax));
+    const fy = view === 'side' ? Math.max(0, Math.min(1, (yv - 1) / (d.layers - 1))) : 1 - Math.max(0, Math.min(1, yv / d.yMax));
     const cx = bx + fx * bw, cy = by + fy * bh;
     const tip = `${p.id}${p.lot ? ' · ' + p.lot : ''} · ${p.element || 'no material'} · X ${p.x}, Y ${p.y}${p.layer != null ? ' · layer ' + p.layer : ''}${p.topBack ? ' · ' + p.topBack : ''}`;
     s += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${o.dot}" fill="#${colorOf(p.element)}" stroke="#262626" stroke-width="0.8"><title>${esc(tip)}</title></circle>`;
@@ -386,7 +389,7 @@ function doReset() {
   $('fileStatus').textContent = '';
   $('pointStatus').textContent = '';
   $('mapping').hidden = true; $('settingsCard').hidden = true; $('viewCard').hidden = true;
-  $('preset').value = 'E81C'; $('dimW').value = 300; $('dimH').value = 210; $('dimL').value = 37;
+  $('preset').value = 'E81C'; $('dimW').value = 320; $('dimH').value = 98; $('dimL').value = 37;
   $('fTB').value = 'all'; $('fSearch').value = ''; $('pptTitle').value = ''; $('pptDate').value = today();
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'cumulative'));
   $('resetOverlay').classList.remove('open');
@@ -401,7 +404,7 @@ function init() {
   drop.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
   $('sheetSel').addEventListener('change', (e) => loadSheet(e.target.value));
   document.querySelectorAll('select[data-col]').forEach((sel) => sel.addEventListener('change', () => { state.map[sel.dataset.col] = Number(sel.value); buildPoints(); }));
-  $('preset').addEventListener('change', () => { if ($('preset').value === 'E81C') { $('dimW').value = 300; $('dimH').value = 210; $('dimL').value = 37; } buildPoints(); });
+  $('preset').addEventListener('change', () => { if ($('preset').value === 'E81C') { $('dimW').value = 320; $('dimH').value = 98; $('dimL').value = 37; } buildPoints(); });
   ['dimW', 'dimH', 'dimL'].forEach((id) => $(id).addEventListener('input', () => { $('preset').value = 'custom'; buildPoints(); }));
   $('fTB').addEventListener('change', render);
   $('fSearch').addEventListener('input', render);

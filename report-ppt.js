@@ -82,20 +82,28 @@
   }
 
   // Electrode drawing with foreign-material points: view "plane" (x, y) or "side" (x, layer)
-  const ELECTRODE = { xMax: 300, yMax: 210, layers: 37 };
-  // dims: { xMax, yMax, layers, colorFn } — defaults to the E81C electrode (300 x 210 mm, 37 layers)
+  // E81C electrode: X 0-320 mm, Y 0-98 mm, 37 anode layers
+  const ELECTRODE = { xMax: 320, yMax: 98, layers: 37 };
+  // dims: { xMax, yMax, layers, colorFn }. Top view: origin (0, 0) is the bottom-left corner of the
+  // electrode and the drawing keeps the real X:Y proportion; side view: X across, layer 1 at the top.
   function electrodeMap(slide, pres, records, box, view, dims) {
     const D = Object.assign({}, ELECTRODE, dims || {});
     const { x, y, w, h } = box;
-    const tabW = w * 0.05;
-    const body = { x: x + tabW, y, w: w - tabW * 2, h };
+    let tabW = w * 0.05;
+    let body = { x: x + tabW, y, w: w - tabW * 2, h };
     if (view === 'side') {
       const n = 18;
       for (let i = 0; i < n; i++) hline(slide, pres, body.x, y + (i + 0.5) * h / n, body.w, i % 2 ? 'A6A6A6' : '7F7F7F', 0.75);
     } else {
-      rect(slide, pres, { x, y: y + h * 0.3, w: tabW, h: h * 0.4, fill: { color: 'F2F2F2' }, line: { color: 'D9D9D9', width: 0.5 } });
+      // Fit the electrode into the box at its true aspect ratio, centered
+      const ratio = D.xMax / D.yMax;
+      let bw = w / 1.1, bh = bw / ratio;
+      if (bh > h) { bh = h; bw = bh * ratio; }
+      tabW = bw * 0.05;
+      body = { x: x + (w - bw) / 2, y: y + (h - bh) / 2, w: bw, h: bh };
+      rect(slide, pres, { x: body.x - tabW, y: body.y + bh * 0.3, w: tabW, h: bh * 0.4, fill: { color: 'F2F2F2' }, line: { color: 'D9D9D9', width: 0.5 } });
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: body.x, y: body.y, w: body.w, h: body.h, rectRadius: 0.03, fill: { color: 'A6A6A6' }, line: { color: '8C8C8C', width: 0.5 } });
-      rect(slide, pres, { x: body.x + body.w, y: y + h * 0.3, w: tabW, h: h * 0.4, fill: { color: 'F8CBAD' } });
+      rect(slide, pres, { x: body.x + body.w, y: body.y + bh * 0.3, w: tabW, h: bh * 0.4, fill: { color: 'F8CBAD' } });
     }
     const d = Math.max(0.045, Math.min(0.07, h / 12));
     records.forEach((r) => {
@@ -103,7 +111,7 @@
       const yy = view === 'side' ? r.layer : r.y;
       if (yy == null) return;
       const fx = Math.max(0, Math.min(1, r.x / D.xMax));
-      const fy = view === 'side' ? Math.max(0, Math.min(1, (yy - 1) / Math.max(1, D.layers - 1))) : Math.max(0, Math.min(1, yy / D.yMax));
+      const fy = view === 'side' ? Math.max(0, Math.min(1, (yy - 1) / Math.max(1, D.layers - 1))) : 1 - Math.max(0, Math.min(1, yy / D.yMax));
       const color = D.colorFn ? D.colorFn(r.element) : M.elementColor(r.element || 'Unknown');
       slide.addShape(pres.shapes.OVAL, { x: body.x + fx * body.w - d / 2, y: body.y + fy * body.h - d / 2, w: d, h: d, fill: { color: r.element ? color : 'FFFFFF' }, line: { color: '262626', width: 0.25 } });
     });

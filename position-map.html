@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="convert.js?v=1"></script>
 <script src="report-model.js?v=1"></script>
-<script src="report-ppt.js?v=3"></script>
+<script src="report-ppt.js?v=4"></script>
 </head>
 <body>
 <header class="app-header">
@@ -50,9 +50,9 @@
   <section class="card" id="settingsCard" hidden>
     <div class="step-head"><span class="step-num">2</span><h2>Cell size and filters</h2></div>
     <div class="settings-grid">
-      <label class="field">Preset <select id="preset"><option value="E81C">E81C (300 × 210 mm, 37 layers)</option><option value="custom">Custom</option></select></label>
-      <label class="field">Width X (mm) <input type="number" id="dimW" value="300" min="1" /></label>
-      <label class="field">Height Y (mm) <input type="number" id="dimH" value="210" min="1" /></label>
+      <label class="field">Preset <select id="preset"><option value="E81C">E81C (320 × 98 mm, 37 layers)</option><option value="custom">Custom</option></select></label>
+      <label class="field">Width X (mm) <input type="number" id="dimW" value="320" min="1" /></label>
+      <label class="field">Height Y (mm) <input type="number" id="dimH" value="98" min="1" /></label>
       <label class="field">Anode layers <input type="number" id="dimL" value="37" min="2" /></label>
       <label class="field">Top / Back <select id="fTB"><option value="all">All</option><option value="Top">Top only</option><option value="Back">Back only</option></select></label>
       <label class="field">Search Cell ID / LOT <input type="search" id="fSearch" placeholder="e.g. IFDE or FD14" /></label>
@@ -93,6 +93,6 @@
 </div>
 <div class="busy" id="busy" hidden><div class="busy-box"><div class="spinner"></div><span id="busyText">Working…</span></div></div>
 <div class="toast" id="toast"></div>
-<script src="position-map.js?v=2"></script>
+<script src="position-map.js?v=3"></script>
 </body>
 </html>
