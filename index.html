@@ -1,47 +1,59 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Battery Teardown Tracker</title>
-<link rel="stylesheet" href="styles.css?v=4" />
+<link rel="stylesheet" href="styles.css?v=5" />
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=5"></script>
 </head>
 <body>
 <header class="app-header">
   <div class="app-title">
     <h1>Battery Teardown Tracker</h1>
-    <span class="sub">배터리 셀 Tear Down 분석 기록 · 이 브라우저에 저장 (기기 간 공유 안 됨)</span>
+    <span class="sub" id="appSubtitle">Battery cell teardown analysis log</span>
   </div>
-  <span class="live-badge connecting" id="liveBadge"><span class="dot"></span><span id="liveBadgeText">불러오는 중</span></span>
+  <span class="live-badge connecting" id="liveBadge"><span class="dot"></span><span id="liveBadgeText">Loading</span></span>
+  <button id="signOutBtn" class="btn btn-ghost header-signout" type="button" hidden>Sign out</button>
 </header>
+
+<div class="migrate-banner" id="migrateBanner" hidden>
+  <span id="migrateBannerText"></span>
+  <button class="btn btn-primary" id="migrateUploadBtn" type="button">Upload to shared database</button>
+  <button class="btn btn-ghost" id="migrateDismissBtn" type="button">Dismiss</button>
+</div>
 
 <nav class="sheet-tabs" id="sheetTabs"></nav>
 
 <div class="stats-row" id="statsRow">
-  <span class="stat-total" id="statTotal">레코드 0건</span>
-  <span class="paste-hint">📋 엑셀 붙여넣기: 채울 첫 칸 클릭 후 Ctrl+V · 표 바깥에서 Ctrl+V 하면 맨 아래에 새 행으로 추가 · 헤더 행까지 복사하면 열 이름으로 자동 매칭</span>
+  <span class="stat-total" id="statTotal">0 records</span>
+  <span class="paste-hint">📋 Paste from Excel: click the first cell to fill, then Ctrl+V · Ctrl+V outside the table appends rows at the bottom · Include the header row to match columns by name</span>
 </div>
 
 <div class="toolbar">
   <div class="toolbar-group">
-    <input type="search" id="searchInput" placeholder="Cell ID 검색..." />
+    <input type="search" id="searchInput" placeholder="Search Cell ID..." />
   </div>
   <div class="toolbar-group filters">
     <span class="toolbar-group" id="filterSelects"></span>
-    <input type="text" id="filterDate" placeholder="TD Date 포함 검색" />
-    <button id="clearFiltersBtn" class="btn btn-ghost">필터 초기화</button>
+    <input type="text" id="filterDate" placeholder="TD Date contains..." />
+    <button id="clearFiltersBtn" class="btn btn-ghost">Clear filters</button>
   </div>
   <div class="toolbar-group actions">
-    <button id="newRecordBtn" class="btn btn-primary">+ 신규 등록</button>
-    <input type="number" id="addRowCount" value="1" min="1" max="1000" title="추가할 빈 행 수" style="width:64px" />
-    <button id="addRowBtn" class="btn btn-secondary">+ 빈 행 추가</button>
+    <button id="newRecordBtn" class="btn btn-primary">+ New record</button>
+    <input type="number" id="addRowCount" value="1" min="1" max="1000" title="Number of blank rows to add" style="width:64px" />
+    <button id="addRowBtn" class="btn btn-secondary">+ Add blank rows</button>
     <label class="btn btn-secondary file-btn">
-      가져오기(CSV/Excel)
+      Import (CSV/Excel)
       <input type="file" id="importInput" accept=".csv,.xlsx,.xls" hidden />
     </label>
-    <button id="exportCsvBtn" class="btn btn-secondary">CSV 내보내기</button>
-    <button id="exportXlsxBtn" class="btn btn-secondary">Excel 내보내기</button>
+    <button id="exportCsvBtn" class="btn btn-secondary">Export CSV</button>
+    <button id="exportXlsxBtn" class="btn btn-secondary">Export Excel</button>
+    <button id="resetBtn" class="btn btn-danger">Reset</button>
   </div>
 </div>
 
@@ -50,22 +62,61 @@
     <thead><tr id="tableHeadRow"></tr></thead>
     <tbody id="tableBody"></tbody>
   </table>
-  <div class="loading-state" id="loadingState">데이터를 불러오는 중입니다…</div>
-  <div class="empty-state" id="emptyState" hidden>등록된 레코드가 없습니다. "신규 등록"으로 첫 셀을 추가하세요.</div>
+  <div class="loading-state" id="loadingState">Loading data…</div>
+  <div class="empty-state" id="emptyState" hidden>No records yet. Click "New record" to add the first cell.</div>
+</div>
+
+<!-- Team Sign-in Modal -->
+<div class="modal-overlay" id="loginOverlay">
+  <div class="modal modal-login">
+    <div class="modal-header">
+      <h2>Team sign-in</h2>
+    </div>
+    <form class="modal-body" id="loginForm">
+      <p class="login-text">Enter the team password to view and edit the shared data. This browser stays signed in until you sign out.</p>
+      <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Team password" />
+      <div class="login-error" id="loginError"></div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="loginBtn" type="submit" form="loginForm">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Modal -->
+<div class="modal-overlay" id="resetModalOverlay">
+  <div class="modal modal-login">
+    <div class="modal-header">
+      <h2>Reset data</h2>
+      <button class="modal-close" id="resetModalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="login-text" id="resetScopeNote"></p>
+      <label class="reset-option"><input type="radio" name="resetScope" value="current" checked /> <span id="resetCurrentLabel">Current tab only</span></label>
+      <label class="reset-option"><input type="radio" name="resetScope" value="all" /> All tabs (Tear Down + Frozen IR · Spot Analysis), including attached images</label>
+      <p class="field-warning">This permanently deletes the data and cannot be undone. Export to CSV/Excel first if you may need it.</p>
+      <label class="reset-confirm-label" for="resetConfirmInput">Type <b>RESET</b> to confirm</label>
+      <input type="text" id="resetConfirmInput" autocomplete="off" placeholder="RESET" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="resetCancelBtn">Cancel</button>
+      <button class="btn btn-danger" id="resetConfirmBtn" disabled>Delete data</button>
+    </div>
+  </div>
 </div>
 
 <!-- Record Form Modal -->
 <div class="modal-overlay" id="formModalOverlay">
   <div class="modal modal-form">
     <div class="modal-header">
-      <h2 id="formModalTitle">신규 셀 등록</h2>
+      <h2 id="formModalTitle">New cell record</h2>
       <button class="modal-close" id="formModalClose">&times;</button>
     </div>
     <div class="modal-body" id="formModalBody"></div>
     <div class="modal-footer">
       <span class="dup-warning" id="dupWarning"></span>
-      <button class="btn btn-ghost" id="formCancelBtn">취소</button>
-      <button class="btn btn-primary" id="formSaveBtn">저장</button>
+      <button class="btn btn-ghost" id="formCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="formSaveBtn">Save</button>
     </div>
   </div>
 </div>
@@ -74,14 +125,14 @@
 <div class="modal-overlay" id="detailModalOverlay">
   <div class="modal modal-detail">
     <div class="modal-header">
-      <h2 id="detailModalTitle">상세 정보</h2>
+      <h2 id="detailModalTitle">Details</h2>
       <button class="modal-close" id="detailModalClose">&times;</button>
     </div>
     <div class="modal-body" id="detailModalBody"></div>
     <div class="modal-footer">
-      <button class="btn btn-danger" id="detailDeleteBtn">행 삭제</button>
-      <button class="btn btn-ghost" id="detailCloseBtn">닫기</button>
-      <button class="btn btn-primary" id="detailEditBtn">전체 편집</button>
+      <button class="btn btn-danger" id="detailDeleteBtn">Delete row</button>
+      <button class="btn btn-ghost" id="detailCloseBtn">Close</button>
+      <button class="btn btn-primary" id="detailEditBtn">Edit all fields</button>
     </div>
   </div>
 </div>
@@ -101,13 +152,13 @@
 <div class="modal-overlay" id="yearModalOverlay">
   <div class="modal modal-import">
     <div class="modal-header">
-      <h2>TD Date 연도 확인</h2>
+      <h2>Confirm TD Date year</h2>
       <button class="modal-close" id="yearModalClose">&times;</button>
     </div>
     <div class="modal-body" id="yearModalBody"></div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="yearCancelBtn">취소</button>
-      <button class="btn btn-primary" id="yearConfirmBtn">확인</button>
+      <button class="btn btn-ghost" id="yearCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="yearConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
@@ -116,19 +167,19 @@
 <div class="modal-overlay" id="importModalOverlay">
   <div class="modal modal-import">
     <div class="modal-header">
-      <h2>가져오기 검토</h2>
+      <h2>Review import</h2>
       <button class="modal-close" id="importModalClose">&times;</button>
     </div>
     <div class="modal-body" id="importModalBody"></div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="importCancelBtn">취소</button>
-      <button class="btn btn-primary" id="importConfirmBtn">가져오기 확정</button>
+      <button class="btn btn-ghost" id="importCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="importConfirmBtn">Import</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
