@@ -226,7 +226,7 @@ function cellSvg(points, view, opts) {
   } else {
     s += `<rect x="0" y="${o.h * 0.3}" width="${tabW}" height="${o.h * 0.4}" fill="#F2F2F2" stroke="#D9D9D9"/>`;
     s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${o.h * 0.04}" fill="#A6A6A6" stroke="#8C8C8C"/>`;
-    s += `<rect x="${bx + bw}" y="${o.h * 0.15}" width="${tabW}" height="${o.h * 0.4}" fill="#F8CBAD"/>`;
+    s += `<rect x="${bx + bw}" y="${o.h * 0.3}" width="${tabW}" height="${o.h * 0.4}" fill="#F8CBAD"/>`;
   }
   points.forEach((p) => {
     const yv = view === 'side' ? p.layer : p.y;

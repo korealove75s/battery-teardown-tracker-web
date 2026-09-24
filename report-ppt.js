@@ -95,7 +95,7 @@
     } else {
       rect(slide, pres, { x, y: y + h * 0.3, w: tabW, h: h * 0.4, fill: { color: 'F2F2F2' }, line: { color: 'D9D9D9', width: 0.5 } });
       slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: body.x, y: body.y, w: body.w, h: body.h, rectRadius: 0.03, fill: { color: 'A6A6A6' }, line: { color: '8C8C8C', width: 0.5 } });
-      rect(slide, pres, { x: body.x + body.w, y: y + h * 0.15, w: tabW, h: h * 0.4, fill: { color: 'F8CBAD' } });
+      rect(slide, pres, { x: body.x + body.w, y: y + h * 0.3, w: tabW, h: h * 0.4, fill: { color: 'F8CBAD' } });
     }
     const d = Math.max(0.045, Math.min(0.07, h / 12));
     records.forEach((r) => {
