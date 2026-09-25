@@ -78,8 +78,9 @@
       <h2>Team sign-in</h2>
     </div>
     <form class="modal-body" id="loginForm">
-      <p class="login-text">Enter the team password to view and edit the shared data. This browser stays signed in until you sign out.</p>
-      <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Team password" />
+      <p class="login-text">Enter your ID (email) and password to view and edit the shared data. This browser stays signed in until you sign out.</p>
+      <input type="email" id="loginEmail" autocomplete="username" placeholder="ID (email)" />
+      <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Password" />
       <div class="login-error" id="loginError"></div>
     </form>
     <div class="modal-footer">

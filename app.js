@@ -341,7 +341,7 @@ async function initStorage() {
           console.error(err);
           if (err && err.code === 'permission-denied') {
             setLiveBadge('unavailable', 'No access');
-            showToast('Access denied by the database. Sign in with the team password again.', true);
+            showToast('Access denied by the database. Sign in again with an allowed ID.', true);
           } else {
             setLiveBadge('error', 'Sync error');
             showToast('Lost connection to the shared database. Refresh the page.', true);
@@ -383,7 +383,10 @@ async function initStorage() {
 function showLogin() {
   document.getElementById('loginError').textContent = '';
   document.getElementById('loginOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('loginPassword').focus(), 0);
+  setTimeout(() => {
+    const emailEl = document.getElementById('loginEmail');
+    (emailEl.value ? document.getElementById('loginPassword') : emailEl).focus();
+  }, 0);
 }
 function hideLogin() {
   document.getElementById('loginOverlay').classList.remove('open');
@@ -391,20 +394,23 @@ function hideLogin() {
 }
 async function submitLogin(e) {
   e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
   const pw = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('loginError');
   const btn = document.getElementById('loginBtn');
-  if (!pw) { errEl.textContent = 'Enter the team password.'; return; }
+  if (!email) { errEl.textContent = 'Enter your ID (email).'; return; }
+  if (!pw) { errEl.textContent = 'Enter your password.'; return; }
   btn.disabled = true;
   errEl.textContent = '';
   try {
     await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    await firebase.auth().signInWithEmailAndPassword(window.BTT_TEAM_EMAIL, pw);
+    await firebase.auth().signInWithEmailAndPassword(email, pw);
   } catch (err) {
     console.error(err);
     const code = err && err.code;
-    errEl.textContent = (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials')
-      ? 'Incorrect password.'
+    errEl.textContent = (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials' || code === 'auth/user-not-found')
+      ? 'Incorrect ID or password.'
+      : code === 'auth/invalid-email' ? 'Enter a valid email address as the ID.'
       : code === 'auth/too-many-requests' ? 'Too many attempts. Wait a few minutes and try again.'
         : code === 'auth/network-request-failed' ? 'Network error. Check your connection.'
           : 'Sign-in failed (' + (code || 'unknown error') + ').';
