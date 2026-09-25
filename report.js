@@ -209,12 +209,12 @@ function renderCounts() {
 }
 
 function updateBuildState() {
-  const ready = !!(data.ocv && data.stats);
+  const ready = !!(data.ocv && data.stats && data.genealogy);
   $('buildBtn').disabled = !ready;
-  const missing = [!data.ocv && 'OCV Tracking Sheet', !data.stats && 'lot summary'].filter(Boolean);
+  const missing = [!data.ocv && 'OCV Tracking Sheet', !data.stats && 'lot summary', !data.genealogy && 'process genealogy CSV'].filter(Boolean);
   $('buildHint').textContent = ready
-    ? (data.review || (data.ocv && data.ocv.cells.some((c) => (c.location || '').trim())) ? '' : 'Tip: neither the OCV Tracking Sheet (Coating Location column) nor an analysis report gives a Location, so inside/outside charts stay empty. ') + (data.genealogy ? '' : 'Without the genealogy CSV, slides 5–7 are left blank.')
-    : `Load the ${missing.join(' and ')} first.`;
+    ? (data.review || (data.ocv && data.ocv.cells.some((c) => (c.location || '').trim())) ? '' : 'Tip: neither the OCV Tracking Sheet (Coating Location column) nor an analysis report gives a Location, so inside/outside charts stay empty. ')
+    : `Load the ${missing.length > 1 ? missing.slice(0, -1).join(', ') + ' and ' + missing[missing.length - 1] : missing[0]} first.`;
 }
 
 // ---------------------------------------------------------------------------
