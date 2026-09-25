@@ -221,7 +221,6 @@
     const X0 = 1.05, CW = R - X0, n = t.lots.length || 1;
     const cx = (i) => X0 + (i + 0.5) / n * CW;
     const edge = (i) => X0 + i / n * CW;
-    const layout = { x: 0, y: 0.06, w: 1, h: 0.88 };
     const Y = { mon: 1.26, rate: 1.54, rateH: 1.24, io: 2.84, ioH: 0.44, note: 3.34, prodEnd: 5.32, table: 5.42 };
 
     // Month headers and boundaries
@@ -236,22 +235,30 @@
     rowLabel(slide, pres, '외부 /\n내부', Y.io, Y.ioH);
     rowLabel(slide, pres, '개선\n사항\n및\n생산량', Y.note, Y.prodEnd - Y.note);
 
+    // The three trend bands are drawn with shapes on the same lot grid (edge / cx) as the month headers and
+    // the table, so every lot sits exactly inside its month column (chart objects add their own padding).
+    const slot = CW / n, barW = slot * 0.78;
+    const seg = (x1, y1, x2, y2, color, width) => slide.addShape(pres.shapes.LINE, {
+      x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1), flipV: (y2 < y1) !== (x2 < x1),
+      line: { color, width },
+    });
+
     // Rate lines (E, L)
     const rMax = Math.max(0.5, Math.ceil(Math.max(...t.eRate, ...t.lRate, 0) * 10) / 10);
-    slide.addChart(pres.charts.LINE, [
-      { name: 'E', labels: t.labels, values: t.eRate.map((v) => Math.round(v * 1000) / 1000) },
-      { name: 'L', labels: t.labels, values: t.lRate.map((v) => Math.round(v * 1000) / 1000) },
-    ], {
-      x: X0, y: Y.rate, w: CW, h: Y.rateH, layout, chartColors: [C.e, C.l], lineSize: 1.5, lineDataSymbol: 'circle', lineDataSymbolSize: 3,
-      catAxisHidden: true, valAxisHidden: true, valAxisMinVal: 0, valAxisMaxVal: rMax, valGridLine: { color: C.grid, size: 0.5, style: 'dash' },
-      showLegend: false,
-    });
-    const yOf = (v) => Y.rate + Y.rateH * (layout.y + layout.h * (1 - v / rMax));
+    const rTop = Y.rate + 0.08, rBottom = Y.rate + Y.rateH - 0.08;
+    const yOf = (v) => rBottom - (rBottom - rTop) * Math.min(1, Math.max(0, v / rMax));
     for (let k = 0; k <= 5; k++) {
       const v = rMax * k / 5;
+      if (k) hline(slide, pres, X0, yOf(v), CW, C.grid, 0.5, 'dash');
       txt(slide, (Math.round(v * 10) / 10).toFixed(1), { x: 0.76, y: yOf(v) - 0.07, w: 0.26, h: 0.14, fontSize: 7, align: 'right', color: C.sub });
     }
+    hline(slide, pres, X0, yOf(0), CW, 'BFBFBF', 0.5);
     txt(slide, '(%)', { x: 0.76, y: Y.rate - 0.12, w: 0.26, h: 0.12, fontSize: 6.5, align: 'right', color: C.mute });
+    [[t.lRate, C.l], [t.eRate, C.e]].forEach(([vals, color]) => {
+      for (let i = 1; i < n; i++) seg(cx(i - 1), yOf(vals[i - 1]), cx(i), yOf(vals[i]), color, 1.5);
+      const d = Math.min(0.055, slot * 0.6);
+      vals.forEach((v, i) => slide.addShape(pres.shapes.OVAL, { x: cx(i) - d / 2, y: yOf(v) - d / 2, w: d, h: d, fill: { color }, line: { color, width: 0.25 } }));
+    });
     // E min / max labels per month
     t.months.forEach((mo) => {
       const idx = []; for (let i = mo.first; i <= mo.last; i++) idx.push(i);
@@ -263,33 +270,35 @@
       });
     });
 
-    // Inside / outside share (100% stacked)
-    const has = t.insideShare.map((v) => v != null);
-    slide.addChart(pres.charts.BAR, [
-      { name: '내부', labels: t.labels, values: t.insideShare.map((v) => (v == null ? 0 : Math.round(v * 10) / 10)) },
-      { name: '외부', labels: t.labels, values: t.insideShare.map((v, i) => (has[i] ? Math.round((100 - v) * 10) / 10 : 0)) },
-    ], {
-      x: X0, y: Y.io, w: CW, h: Y.ioH, layout, barDir: 'col', barGrouping: 'stacked', barGapWidthPct: 25, chartColors: [C.inside, C.outside],
-      catAxisHidden: true, valAxisHidden: true, valAxisMinVal: 0, valAxisMaxVal: 100, valGridLine: { style: 'none' }, showLegend: false,
+    // Inside / outside share (100% stacked), each bar outlined
+    const ioTop = Y.io + 0.03, ioBottom = Y.io + Y.ioH - 0.03, ioH = ioBottom - ioTop;
+    t.insideShare.forEach((v, i) => {
+      if (v == null) return;
+      const x = cx(i) - barW / 2, inH = ioH * v / 100;
+      if (inH < ioH) rect(slide, pres, { x, y: ioTop, w: barW, h: ioH - inH, fill: { color: C.outside }, line: { color: '8C8C8C', width: 0.5 } });
+      if (inH > 0) rect(slide, pres, { x, y: ioBottom - inH, w: barW, h: inH, fill: { color: C.inside }, line: { color: 'B85A1F', width: 0.5 } });
     });
-    ['100%', '50%', '0%'].forEach((l, k) => txt(slide, l, { x: 0.74, y: Y.io + Y.ioH * (layout.y + layout.h * k / 2) - 0.07, w: 0.28, h: 0.14, fontSize: 6.5, align: 'right', color: C.sub }));
-    // Monthly inside share written over each month's bars
+    ['100%', '50%', '0%'].forEach((l, k) => txt(slide, l, { x: 0.74, y: ioTop + ioH * k / 2 - 0.07, w: 0.28, h: 0.14, fontSize: 6.5, align: 'right', color: C.sub }));
+    // Monthly inside share written over each month's bars (no background box)
     t.months.forEach((mo) => {
       if (!mo.located) return;
       const x1 = edge(mo.first), x2 = edge(mo.last + 1);
-      txt(slide, `내부 ${(mo.inside / mo.located * 100).toFixed(1)}%`, { x: x1 + (x2 - x1) / 2 - 0.45, y: Y.io + 0.02, w: 0.9, h: 0.16, fontSize: 7.5, bold: true, align: 'center', color: C.ink, fill: { color: 'FFFFFF', transparency: 15 } });
+      txt(slide, `내부 ${(mo.inside / mo.located * 100).toFixed(1)}%`, { x: x1 + (x2 - x1) / 2 - 0.45, y: Y.io + 0.02, w: 0.9, h: 0.16, fontSize: 8, bold: true, align: 'center', color: C.ink });
     });
 
     // Production bars in the lower part of the band, improvement notes above them
     const pMax = Math.max(10000, Math.ceil(Math.max(...t.production, 0) / 5000) * 5000);
     const prodTop = 4.44, prodBottom = 5.06;
-    const pLayout = { x: 0, y: (prodTop - 4.3) / (Y.prodEnd - 4.3), w: 1, h: (prodBottom - prodTop) / (Y.prodEnd - 4.3) };
-    slide.addChart(pres.charts.BAR, [{ name: '생산량', labels: t.labels.map((l) => l.slice(1)), values: t.production }], Object.assign({
-      x: X0, y: 4.3, w: CW, h: Y.prodEnd - 4.3, layout: pLayout, barDir: 'col', barGapWidthPct: 25, chartColors: [C.bar],
-      valAxisHidden: true, valAxisMinVal: 0, valAxisMaxVal: pMax, valGridLine: { style: 'none' }, showLegend: false,
-      catAxisLabelFontSize: 6.5, catAxisLabelRotate: 270, catAxisLabelFrequency: n > 60 ? 3 : n > 30 ? 2 : 1, catAxisLineShow: false,
-    }, AXIS, { catAxisLineShow: false }));
-    const pY = (v) => prodTop + (prodBottom - prodTop) * (1 - v / pMax);
+    const pY = (v) => prodTop + (prodBottom - prodTop) * (1 - Math.min(1, v / pMax));
+    t.production.forEach((v, i) => {
+      if (v > 0) rect(slide, pres, { x: cx(i) - barW / 2, y: pY(v), w: barW, h: prodBottom - pY(v), fill: { color: C.bar } });
+    });
+    hline(slide, pres, X0, prodBottom, CW, 'BFBFBF', 0.5);
+    const every = n > 60 ? 3 : n > 30 ? 2 : 1;
+    t.labels.forEach((l, i) => {
+      if (i % every) return;
+      txt(slide, l.slice(1), { x: cx(i) - 0.17, y: prodBottom + 0.19 - 0.06, w: 0.34, h: 0.12, fontSize: 6.5, color: C.sub, align: 'right', rotate: 270 });
+    });
     [pMax, 0].forEach((v) => txt(slide, v ? `${Math.round(v / 1000)}K` : '0', { x: 0.74, y: pY(v) - 0.07, w: 0.28, h: 0.14, fontSize: 6.5, align: 'right', color: C.sub }));
     // Notes: flag + text, packed into up to three rows so texts never overlap
     const NOTE_W = 1.62, LINE_H = 0.12, ROW_H = 0.37, ROWS = 3;
