@@ -16,7 +16,7 @@ const data = {
 // ---------------------------------------------------------------------------
 // Worker (shared with the tracker)
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=7');
+const worker = new Worker('worker.js?v=8');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -245,6 +245,7 @@ async function build() {
       review: data.review ? data.review.byId : {},
       stats: data.stats.rows,
       genealogy: data.genealogy ? data.genealogy.byId : {},
+      history: window.LvReportHistory,
       settings,
     });
     const pres = P.build(window.PptxGenJS, model);

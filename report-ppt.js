@@ -10,8 +10,8 @@
   const R = W - MX;              // right edge of the content area
   const C = {
     ink: '1F1F1F', sub: '595959', mute: '8C8C8C',
-    navy: '1F3864', accent: '2F5597', line: 'D0D7E2', panel: 'EEF2F8', grid: 'E4E8EF',
-    e: '2F5597', l: 'ED7D31', inside: 'F08C4B', outside: 'D5DAE3', bar: 'C9CED8', green: '3A7D2C',
+    navy: '333333', accent: 'E07B39', line: 'D9D9D9', panel: 'F2F2F2', grid: 'E7E7E7',
+    e: '262626', l: 'ED7D31', inside: 'F08C4B', outside: 'D0D0D0', bar: 'C8C8C8', green: '3A7D2C',
   };
   const PT_H = 0.27;             // panel title height
 
@@ -109,7 +109,7 @@
     let body = { x: x + tabW, y, w: w - tabW * 2, h };
     if (view === 'side') {
       const n = 18;
-      for (let i = 0; i < n; i++) hline(slide, pres, body.x, y + (i + 0.5) * h / n, body.w, i % 2 ? 'B4BAC4' : '8C939E', 0.75);
+      for (let i = 0; i < n; i++) hline(slide, pres, body.x, y + (i + 0.5) * h / n, body.w, i % 2 ? 'B8B8B8' : '8C8C8C', 0.75);
     } else {
       const ratio = D.xMax / D.yMax;
       let bw = w / 1.1, bh = bw / ratio;
@@ -117,7 +117,7 @@
       tabW = bw * 0.05;
       body = { x: x + (w - bw) / 2, y: y + (h - bh) / 2, w: bw, h: bh };
       rect(slide, pres, { x: body.x - tabW, y: body.y + bh * 0.3, w: tabW, h: bh * 0.4, fill: { color: 'F2F2F2' }, line: { color: 'D0D0D0', width: 0.5 } });
-      slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: body.x, y: body.y, w: body.w, h: body.h, rectRadius: 0.03, fill: { color: 'AEB4BE' }, line: { color: '8C939E', width: 0.5 } });
+      slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: body.x, y: body.y, w: body.w, h: body.h, rectRadius: 0.03, fill: { color: 'B0B0B0' }, line: { color: '8C8C8C', width: 0.5 } });
       rect(slide, pres, { x: body.x + body.w, y: body.y + bh * 0.3, w: tabW, h: bh * 0.4, fill: { color: 'F8CBAD' } });
     }
     const d = Math.max(0.05, Math.min(0.075, h / 11));
@@ -142,7 +142,7 @@
   function pie(slide, pres, entries, box, colorFn, opts) {
     const total = entries.reduce((s, [, n]) => s + n, 0);
     if (!total) { noData(slide, null, box); return; }
-    const labels = entries.map(([k, n]) => (n / total < 0.05 ? '' : `${k} ${n}\n(${(n / total * 100).toFixed(1)}%)`));
+    const labels = entries.map(([k, n]) => (n / total < 0.07 ? '' : `${k} ${n}\n(${(n / total * 100).toFixed(1)}%)`));
     slide.addChart(pres.charts.PIE, [{ name: 'n', labels, values: entries.map(([, n]) => n) }], Object.assign({
       x: box.x, y: box.y, w: box.w, h: box.h,
       chartColors: entries.map(([k], i) => colorFn(k, i)),
@@ -229,7 +229,7 @@
       const x1 = edge(mo.first), x2 = edge(mo.last + 1);
       rect(slide, pres, { x: x1, y: Y.mon, w: x2 - x1, h: 0.24, fill: { color: C.navy }, line: { color: 'FFFFFF', width: 1 } });
       txt(slide, mo.label || mo.name, { x: x1, y: Y.mon, w: x2 - x1, h: 0.24, fontSize: 10.5, bold: true, align: 'center', color: 'FFFFFF' });
-      if (i > 0) vline(slide, pres, x1, Y.rate, 3.5, '8C939E', 0.75, 'dash');
+      if (i > 0) vline(slide, pres, x1, Y.rate, 3.5, '8C8C8C', 0.75, 'dash');
     });
 
     rowLabel(slide, pres, '저전압\n불량률', Y.rate, Y.rateH, [{ label: 'E', color: C.e }, { label: 'L', color: C.l }]);
@@ -312,26 +312,27 @@
       });
 
     // Monthly table
-    const cols = t.months.length;
     const pctS = (v) => `${v.toFixed(2)}%`;
     const rows = [
       ['구분', ...t.months.map((m) => m.label || m.name)],
       ['E 등급', ...t.months.map((m) => `${m.eCount}건 (${pctS(m.eRate)})`)],
       ['L 등급', ...t.months.map((m) => `${m.lCount}건 (${pctS(m.lRate)})`)],
-      ['전체 불량율(E+L)', ...t.months.map((m) => pctS(m.totalRate))],
+      ['전체 불량율\n(E+L)', ...t.months.map((m) => pctS(m.totalRate))],
       ['내부', ...t.months.map((m) => (m.located ? `${m.inside}건 (${(m.inside / m.located * 100).toFixed(1)}%)` : '-'))],
       ['외부', ...t.months.map((m) => (m.located ? `${m.outside}건 (${(m.outside / m.located * 100).toFixed(1)}%)` : '-'))],
       ['전체 생산량', ...t.months.map((m) => m.production.toLocaleString('en-US'))],
     ];
-    const firstW = 1.15;
-    const colW = [firstW, ...Array(cols).fill((R - MX - firstW) / Math.max(cols, 1))];
+    // Same column edges as the month headers and charts above, so each month lines up from top to bottom
+    const colW = [X0 - MX, ...t.months.map((mo) => edge(mo.last + 1) - edge(mo.first))];
+    const narrow = colW.map((w, ci) => ci > 0 && w < 1.05);
+    rows.forEach((r) => r.forEach((c, ci) => { if (narrow[ci]) r[ci] = String(c).replace(' (', '\n('); }));
     slide.addTable(rows.map((r, ri) => r.map((c, ci) => ({
       text: c,
       options: {
-        fontFace: FONT, fontSize: 8.5, align: 'center', valign: 'middle', bold: ri === 0 || ci === 0 || ri === 3,
+        fontFace: FONT, fontSize: ci === 0 ? 8 : narrow[ci] ? (colW[ci] < 0.55 ? 6 : 7) : 8.5, align: 'center', valign: 'middle', bold: ri === 0 || ci === 0 || ri === 3,
         color: ri === 0 ? 'FFFFFF' : ci === 0 ? C.navy : C.ink,
-        fill: { color: ri === 0 ? C.navy : ci === 0 ? C.panel : ri === 3 ? 'F7F9FC' : 'FFFFFF' },
-        border: { type: 'solid', pt: 0.5, color: C.line }, margin: 0.02,
+        fill: { color: ri === 0 ? C.navy : ci === 0 ? C.panel : ri === 3 ? 'F7F7F7' : 'FFFFFF' },
+        border: { type: 'solid', pt: 0.5, color: C.line }, margin: 0.01,
       },
     }))), { x: MX, y: Y.table, w: R - MX, colW, rowH: [0.26, 0.25, 0.25, 0.27, 0.25, 0.25, 0.26] });
   }
@@ -343,18 +344,26 @@
     txt(slide, header, { x, y, w: 3.05, h: 0.44, fontSize: 7.5, color: C.green, valign: 'top' });
     const top = y + 0.46, H = 1.3;
     const box = (bx, by, bw, bh, label, fill, size, color) => {
-      slide.addShape(pres.shapes.RECTANGLE, { x: bx, y: by, w: bw, h: bh, fill: { color: fill }, line: { color: '7F8792', width: 0.75 } });
+      slide.addShape(pres.shapes.RECTANGLE, { x: bx, y: by, w: bw, h: bh, fill: { color: fill }, line: { color: '7F7F7F', width: 0.75 } });
       txt(slide, label, { x: bx, y: by, w: bw, h: bh, fontSize: size || 9, align: 'center', color: color || C.ink });
     };
-    box(x, top, 0.6, H, `E등급\n\n${s.total} 셀\n(100%)`, 'FFFFFF', 9.5);
+    if (s.lGrade) {
+      // Cumulative range with L-grade cells: split the first box into E / L
+      const eH = Math.min(H - 0.5, Math.max(0.5, H * s.eGrade / s.total));
+      box(x, top, 0.6, eH, `E등급\n${s.eGrade}셀\n(${M.pct(s.eGrade, s.total)}%)`, 'FFFFFF', 8.5);
+      box(x, top + eH, 0.6, H - eH, `L등급\n${s.lGrade}셀\n(${M.pct(s.lGrade, s.total)}%)`, 'FFFFFF', 8.5);
+      txt(slide, `총 ${s.total}셀`, { x: x - 0.05, y: top + H + 0.02, w: 0.7, h: 0.2, fontSize: 8.5, bold: true, align: 'center' });
+    } else {
+      box(x, top, 0.6, H, `E등급\n\n${s.total} 셀\n(100%)`, 'FFFFFF', 9.5);
+    }
     const dropH = s.total ? Math.min(H - 0.45, Math.max(0.62, H * s.dropAll / s.total)) : H / 2;
-    box(x + 0.64, top, 0.66, dropH, `냉동저항\nNG\n${s.dropAll}셀\n(${M.pct(s.dropAll, s.total)}%)`, 'DCE1E8', 8.5);
-    box(x + 0.64, top + dropH, 0.66, H - dropH, `NTF\n${s.ntf}셀\n(${M.pct(s.ntf, s.total)}%)`, 'EEF0F3', 8.5);
-    box(x + 1.34, top, 0.66, dropH, `진성불량\n${s.genuine}셀\n(${M.pct(s.genuine, s.dropAll)}%)`, '8C96A5', 8.5, 'FFFFFF');
+    box(x + 0.64, top, 0.66, dropH, `냉동저항\nNG\n${s.dropAll}셀\n(${M.pct(s.dropAll, s.total)}%)`, 'D9D9D9', 8.5);
+    box(x + 0.64, top + dropH, 0.66, H - dropH, `NTF\n${s.ntf}셀\n(${M.pct(s.ntf, s.total)}%)`, 'F2F2F2', 8.5);
+    box(x + 1.34, top, 0.66, dropH, `진성불량\n${s.genuine}셀\n(${M.pct(s.genuine, s.dropAll)}%)`, '7F7F7F', 8.5, 'FFFFFF');
     if (s.nrcf) txt(slide, `NRCF ${s.nrcf}셀 (${M.pct(s.nrcf, s.dropAll)}%)`, { x: x + 1.3, y: top + dropH + 0.03, w: 0.74, h: 0.16, fontSize: 7, align: 'center', color: C.sub });
     // Location breakdown of genuine cells (each band tall enough for two lines)
     const parts = [
-      ['코팅층 외부', s.loc['Coating Top'], 'DEEBF7'],
+      ['코팅층 외부', s.loc['Coating Top'], 'E7E6E6'],
       ['코팅층 내부', s.loc['Coating Inside'], 'E2F0D9'],
       ['Al Foil Surface', s.loc['Al Foil Surface'], 'F8CBAD'],
       ['위치 미확인', s.locUnknown, 'F2F2F2'],
@@ -394,14 +403,20 @@
     const locs = M.LOCATIONS.filter((l) => s.loc[l]);
     const locTitle = locs.map((l) => ({ 'Al Foil Surface': `Al Foil ${s.loc[l]}셀`, 'Coating Inside': `코팅층 내부 ${s.loc[l]}셀`, 'Coating Top': `외부 ${s.loc[l]}셀` }[l])).join(', ');
     panelTitle(slide, pres, `[${locTitle || '위치 정보 없음'} 분석]`, 3.68, r2, 3.4);
-    // Up to 2 locations: one pie per row; 3: two small side by side on top, one below
-    const slots = locs.length <= 2
-      ? [{ x: 3.68, y: r2 + 0.3, w: 2.5, h: 1.85 }, { x: 3.68, y: r3 + 0.02, w: 2.5, h: 1.9 }]
-      : [{ x: 3.68, y: r2 + 0.3, w: 1.3, h: 1.85 }, { x: 4.95, y: r2 + 0.3, w: 1.3, h: 1.85 }, { x: 3.68, y: r3 + 0.02, w: 2.5, h: 1.9 }];
-    locs.forEach((l, i) => {
+    // The two largest locations get a pie each (top / bottom row, in the usual order); a third, smaller one
+    // (usually Al Foil with a few cells) is written as one text line so its labels stay readable
+    const big = [...locs].sort((a, b) => s.loc[b] - s.loc[a]).slice(0, 2);
+    const pieLocs = locs.filter((l) => big.includes(l));
+    const extra = locs.filter((l) => !big.includes(l));
+    const slots = [{ x: 3.68, y: r2 + 0.3 + extra.length * 0.2, w: 2.5, h: 1.85 - extra.length * 0.2 }, { x: 3.68, y: r3 + 0.02, w: 2.5, h: 1.9 }];
+    pieLocs.forEach((l, i) => {
       const b = slots[i];
       txt(slide, l, { x: b.x, y: b.y, w: b.w, h: 0.16, fontSize: 7.5, bold: true, align: 'center', color: C.sub });
-      pie(slide, pres, s.elementsByLocation[l], { x: b.x, y: b.y + 0.14, w: b.w, h: b.h - 0.14 }, (k, j) => M.elementColor(k, j), locs.length > 2 && i < 2 ? { dataLabelFontSize: 7, layout: { x: 0.18, y: 0.2, w: 0.64, h: 0.6 } } : {});
+      pie(slide, pres, s.elementsByLocation[l], { x: b.x, y: b.y + 0.14, w: b.w, h: b.h - 0.14 }, (k, j) => M.elementColor(k, j));
+    });
+    extra.forEach((l, i) => {
+      const list = s.elementsByLocation[l].map(([k, n]) => `${k} ${n}`).join(', ');
+      txt(slide, `${l} ${s.loc[l]}셀: ${list}`, { x: 3.7, y: r2 + 0.3 + i * 0.2, w: 2.5, h: 0.18, fontSize: 7.5, bold: true, color: C.sub, fit: 'shrink' });
     });
     if (!locs.length) noData(slide, 'Analysis 데이터에 Location 값이 없습니다.', { x: 3.68, y: 4.5, w: 3.4, h: 0.3 });
     elementLegend(slide, els, 6.25, r2 + 0.36, { w: 0.8, maxH: 7.3 - r2 - 0.36 });
@@ -525,7 +540,7 @@
         txt(slide, p, { x: MX + 0.05, y, w: 0.4, h: rowH, fontSize: 7, bold: true, color: C.sub });
         const vals = st.byWeek.map((r) => r.values[i]);
         slide.addChart(pres.charts.LINE, [{ name: p, labels, values: vals }], {
-          x: MX + 0.5, y, w: LW - 1.0, h: rowH, chartColors: [C.accent], lineSize: 1, lineDataSymbol: 'none', catAxisHidden: true, valAxisHidden: true,
+          x: MX + 0.5, y, w: LW - 1.0, h: rowH, chartColors: [C.sub], lineSize: 1, lineDataSymbol: 'none', catAxisHidden: true, valAxisHidden: true,
           valAxisMinVal: 0, valGridLine: { style: 'none' }, showLegend: false, layout: { x: 0, y: 0.1, w: 1, h: 0.8 },
         });
         txt(slide, String(vals[vals.length - 1] || 0), { x: MX + LW - 0.45, y, w: 0.4, h: rowH, fontSize: 7, bold: true, align: 'right', color: C.ink });
@@ -597,7 +612,7 @@
     const labels = h.lots;
     const cy = 0.85, ch = 3.5;
     slide.addChart([
-      { type: pres.charts.BAR, data: [{ name: '생산량', labels, values: h.prod }], options: { barDir: 'col', chartColors: ['C9CED8'], barGapWidthPct: 60, secondaryValAxis: true, secondaryCatAxis: true } },
+      { type: pres.charts.BAR, data: [{ name: '생산량', labels, values: h.prod }], options: { barDir: 'col', chartColors: [C.bar], barGapWidthPct: 60, secondaryValAxis: true, secondaryCatAxis: true } },
       { type: pres.charts.LINE, data: [{ name: '불량률 E', labels, values: h.e.map((v) => (v == null ? 0 : v)) }, { name: '불량률 L', labels, values: h.l.map((v) => (v == null ? 0 : v)) }], options: { chartColors: [C.e, C.l], lineSize: 2, lineDataSymbol: 'none' } },
     ], Object.assign({
       x: MX, y: cy, w: R - MX, h: ch, showLegend: true, legendPos: 't', legendFontSize: 9, legendFontFace: FONT, legendColor: C.sub,
@@ -619,7 +634,7 @@
     h.groups.forEach(([g, cnt]) => { for (let i = 0; i < cnt; i++) groupOf.push(g); });
     const cellOpt = (ri, extra) => Object.assign({
       fontFace: FONT, fontSize: 7, align: 'center', valign: 'middle', color: ri < 2 ? C.navy : C.ink, bold: ri < 2,
-      fill: { color: ri === 0 ? 'DCE3EF' : ri === 1 ? C.panel : 'FFFFFF' }, border: { type: 'solid', pt: 0.5, color: C.line }, margin: 0,
+      fill: { color: ri === 0 ? 'E4E4E4' : ri === 1 ? C.panel : 'FFFFFF' }, border: { type: 'solid', pt: 0.5, color: C.line }, margin: 0,
     }, extra || {});
     const half = (from, to, withTotal, y) => {
       const lots = h.lots.slice(from, to);

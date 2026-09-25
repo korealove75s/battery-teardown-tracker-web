@@ -4,7 +4,7 @@ importScripts(
   'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js',
   'xlsx-subset.js?v=1',
   'convert.js?v=4',
-  'report-model.js?v=4'
+  'report-model.js?v=5'
 );
 
 var source = null; // { handle (XlsxSubset workbook or null), data, names }

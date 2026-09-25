@@ -29,8 +29,10 @@
     const u = t.toUpperCase();
     if (['NTF', 'OVER.F', 'OVRE.F', 'N/A', 'NA', 'NRCF', '-', 'NONE'].includes(u)) return '';
     if (/pin\s*hole/i.test(t)) return 'Pin Hole';
-    return t.split(/\s*(?:&|,|\/|\+|and)\s*/i).map((p) => p.trim()).filter(Boolean)
+    const name = t.split(/\s*(?:&|,|\/|\+|and)\s*/i).map((p) => p.trim()).filter(Boolean)
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' & ');
+    // Keep the legend spelling (e.g. "Cell Missing") so the element keeps its usual color
+    return Object.keys(ELEMENT_COLORS).find((k) => k.toLowerCase() === name.toLowerCase()) || name;
   }
   function elementGroup(el) {
     if (!el) return '';
@@ -49,7 +51,7 @@
   const LOCATIONS = ['Al Foil Surface', 'Coating Inside', 'Coating Top'];
   function normTopBack(s) {
     const t = text(s).toLowerCase();
-    return t === 'top' ? 'Top' : t === 'back' ? 'Back' : '';
+    return t === 'top' || t === '앞' ? 'Top' : t === 'back' || t === '뒤' ? 'Back' : '';
   }
   function normDrop(s) {
     const t = text(s).toUpperCase();
@@ -171,6 +173,7 @@
     return {
       id,
       lot: padLot(cell.lot),
+      grade: text(cell.grade).toUpperCase(),
       voltageDrop: vd,
       element,
       group: elementGroup(element),
@@ -182,6 +185,20 @@
       reviewed: !!review,
       g: genealogy || null,
     };
+  }
+
+  // Earlier weeks' analyzed cells (report-history.js rows) as records
+  const HIST_DROP = { D: 'Drop', N: 'NTF', R: 'NRCF' };
+  const HIST_LOC = { T: 'Coating Top', I: 'Coating Inside', F: 'Al Foil Surface' };
+  function historyRecords(rows) {
+    return (rows || []).map(([lot, grade, drop, sem, loc, tb, x, y, layer]) => {
+      const element = normElement(sem);
+      return {
+        id: '', lot, grade, voltageDrop: HIST_DROP[drop] || '', element, group: elementGroup(element),
+        location: HIST_LOC[loc] || '', topBack: tb === 'T' ? 'Top' : tb === 'B' ? 'Back' : '',
+        ...swapXY(x, y), layer, shape: '', reviewed: true, g: null, history: true,
+      };
+    });
   }
 
   // E81C electrode is 98 mm tall: Y above that means X and Y were entered the wrong way round
@@ -212,7 +229,8 @@
     LOCATIONS.forEach((l) => { elementsByLocation[l] = countBy(genuine.filter((r) => r.location === l), (r) => r.element); });
     const topBack = countBy(genuine, (r) => r.topBack);
     const withElement = genuine.filter((r) => r.element).length;
-    return { total, dropAll: dropAll.length, genuine: genuine.length, nrcf, ntf, loc, locUnknown, elements, elementsByLocation, topBack, withElement, genuineRecords: genuine };
+    const lGrade = records.filter((r) => r.grade === 'L').length;
+    return { eGrade: total - lGrade, lGrade, total, dropAll: dropAll.length, genuine: genuine.length, nrcf, ntf, loc, locUnknown, elements, elementsByLocation, topBack, withElement, genuineRecords: genuine };
   }
 
   // Per-lot element counts split into Steel / Copper / Other panels
@@ -423,7 +441,7 @@
   //   settings: { from, to, cumFrom, trendFrom, team, date, eCriterion, lCriterion, notes, trendHeadline, headline }
   // ---------------------------------------------------------------------------
   function assemble(input) {
-    const { master, built, review, stats, genealogy, settings } = input;
+    const { master, built, review, stats, genealogy, settings, history } = input;
     const gen = genealogy || {};
     const from = padLot(settings.from), to = padLot(settings.to), cumFrom = padLot(settings.cumFrom || from);
     const key = (c) => text(c.cellId).toUpperCase();
@@ -440,8 +458,14 @@
     const lotSum = sumLots(stats, from, to);
     const funnelHeader = (lab, s) => `E81C ${lab} ${kfmt(s.production)}\nE 등급 불량률 ${s.eRate.toFixed(2)}% (판정, : ${settings.eCriterion || '2.42mV'})\nL등급 불량률 ${s.lRate.toFixed(2)}% (판정 : ${settings.lCriterion || '3.5시그마'})`;
 
-    // Cumulative: every analyzed cell from the cumulative start lot
-    const cumRecords = master.filter((c) => inRange(c.lot, cumFrom, to) && (colored ? isCounted(c) : (built[key(c)] || review[key(c)] || text(c.ntf) || text(c.anodeSheet) || text(c.voltageDrop)))).map(mk);
+    // Cumulative: this week's cells (same as slide 2) + every analyzed cell of the earlier lots from the
+    // cumulative start lot. Earlier lots come from the saved history (report-history.js) where it has them,
+    // otherwise from the OCV workbook.
+    const hist = historyRecords(history && history.rows).filter((r) => inRange(r.lot, cumFrom, to) && lotKey(r.lot) < from);
+    const histLots = new Set(hist.map((r) => r.lot));
+    const earlier = master.filter((c) => inRange(c.lot, cumFrom, to) && lotKey(c.lot) < from && !histLots.has(padLot(c.lot)) &&
+      (colored ? isCounted(c) : (built[key(c)] || review[key(c)] || text(c.ntf) || text(c.anodeSheet) || text(c.voltageDrop)))).map(mk);
+    const cumRecords = [...hist, ...earlier, ...reportRecords];
     const cumSummary = analysisSummary(cumRecords);
     const cumLots = [...new Set(cumRecords.map((r) => r.lot))].sort();
     // The cumulative range starts at the first lot that actually has analyzed cells
@@ -473,7 +497,7 @@
       cumulative: {
         summary: cumSummary, lots: cumLots, lotSum: cumSum,
         funnelHeader: funnelHeader(`${cumStart} ~ ${to}`, cumSum),
-        headline: settings.cumHeadline || analysisHeadline(`${cumStart} ~ ${to}`, cumSummary, ' (E등급)'),
+        headline: settings.cumHeadline || analysisHeadline(`${cumStart} ~ ${to}`, cumSummary, cumSummary.lGrade ? ` (E등급 ${cumSummary.eGrade}셀, L등급 ${cumSummary.lGrade}셀)` : ' (E등급)'),
         lotPanels: lotElementPanels(cumSummary.genuineRecords, cumLots),
       },
       stacker: stackerTables(gen, to, 2),
@@ -496,7 +520,7 @@
     text, num, padLot, lotKey, lotMonth, shortLot, inRange, lotParts,
     normElement, elementGroup, normLocation, normTopBack, normDrop, GROUPS, LOCATIONS,
     ELEMENT_COLORS, elementColor, LOCATION_COLORS, TOPBACK_COLORS,
-    parseLotStats, sumLots, createGenealogyParser, makeRecord, analysisSummary, lotElementPanels,
+    parseLotStats, sumLots, historyRecords, createGenealogyParser, makeRecord, analysisSummary, lotElementPanels,
     monthlyTrend, trendHeadline, lotLocation, BASELINE_LOCATION, BASELINE_FIXED_TO, stackerTables, outsideEquipment, electrodeAnalysis, analysisHeadline, countBy, pct, isoWeek,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

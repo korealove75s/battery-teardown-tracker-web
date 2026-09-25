@@ -78,6 +78,8 @@ Slides: 1 monthly trend with improvement notes, 2 five-analysis results, 3–4 f
 
 Inside / outside chart on slide 1 (inside = coating inside + Al foil, outside = coating top): lots FD10 ~ FH03 always use the counts from *260714 Low Voltage Total updated* (sheet "260410 FD10~FH03 원본"). Later lots use the analysis report when it has located cells for that lot, otherwise the counts saved from the same workbook (FH04 ~ FH08, FH15 ~ FH19) and *Copy of Copy of Copy of 260714 Low Voltage Total updated* (FH09 ~ FH14). The saved counts are `BASELINE_LOCATION` in `report-model.js`.
 
+Cumulative slide (slide 8): this week's cells (same as slide 2) plus every analyzed cell of the earlier lots from "Cumulative from" (FD10). Earlier lots FD10 ~ FH14 come from `report-history.js` (E / L grade rows saved from the 260714 workbook and its FH09 ~ FH14 copy); lots after that come from the OCV workbook.
+
 Fonts: after the deck is written, every run, chart and the theme is set to Malgun Gothic with the Korean (Hangul) script, so the text does not fall back to another font in other viewers (`fixFonts` in `report-ppt.js`).
 Improvement notes and headline sentences can be edited on the page. The code is in `report-model.js` (numbers) and `report-ppt.js` (layout).
 
