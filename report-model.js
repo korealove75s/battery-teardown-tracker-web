@@ -180,11 +180,12 @@
       voltageDrop: vd,
       element,
       group: elementGroup(element),
-      location: normLocation(r('location')),
+      // Analysis report first, then the OCV Tracking Sheet's own Coating Location column
+      location: normLocation(pick('location') || cell.location),
       topBack: normTopBack(pick('topBack') || (!built ? cell.topBack : '')),
       ...swapXY(num(pick('x') || (!built ? cell.x : '')), num(pick('y') || (!built ? cell.y : ''))),
       layer: num(pick('layer') || (!built ? cell.anodeSheet : '')),
-      shape: r('shape'),
+      shape: pick('shape') || text(cell.shape),
       reviewed: !!review,
       g: genealogy || null,
     };
@@ -476,7 +477,7 @@
     const cumSum = sumLots(stats, cumStart, to);
 
     // Trend: location shares come from every reviewed row (any lot)
-    const reviewedRecords = master.filter((c) => review[key(c)]).map(mk);
+    const reviewedRecords = master.filter((c) => review[key(c)] || text(c.location)).map(mk);
     const trend = monthlyTrend(stats, padLot(settings.trendFrom || cumFrom), to, reviewedRecords);
     const lastMonth = trend.months[trend.months.length - 1];
     if (lastMonth && stats.some((r) => lotMonth(r.lot) === lastMonth.month && lotKey(r.lot) > to && lotParts(r.lot).month === lotParts(to).month)) {
@@ -508,7 +509,7 @@
       cathode: electrodeAnalysis(reportRecords, summary.genuineRecords, 'C', lots),
       anode: electrodeAnalysis(reportRecords, summary.genuineRecords, 'A', lots),
       counts: {
-        report: reportRecords.length, reviewed: reportRecords.filter((r) => r.reviewed).length, withGenealogy: reportRecords.filter((r) => r.g).length, cumulative: cumRecords.length,
+        report: reportRecords.length, reviewed: reportRecords.filter((r) => r.reviewed).length, located: reportRecords.filter((r) => r.reviewed || r.location).length, withGenealogy: reportRecords.filter((r) => r.g).length, cumulative: cumRecords.length,
         coloredOnly: colored,
         // Colored cells of the report lots that are not counted yet because J is still empty
         pending: master.filter((c) => inRange(c.lot, from, to) && c.idColor && !text(c.ntf)).length,

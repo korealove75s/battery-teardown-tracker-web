@@ -54,7 +54,14 @@
     y: ['y(mm)'],
     burnMark: ['burnmark/pinhole/none'],
     eds: ['edsimpurityresults'],
+    // Optional analysis columns (same meaning as the analysis report); when present they fill the report directly
+    shape: ['shape'],
+    location: ['coatinglocation', 'location'],
+    longSide: ['longside'],
+    shortSide: ['shortside'],
+    height: ['height'],
   };
+  var OPTIONAL_HEADERS = ['shape', 'location', 'longSide', 'shortSide', 'height'];
 
   // Find the header row (the one containing "Cell ID") and map each field to a column index.
   function detectMasterColumns(rows) {
@@ -67,6 +74,13 @@
         for (var i = 0; i < candidates.length; i++) {
           var idx = normalized.indexOf(candidates[i]);
           if (idx !== -1) { map[field] = idx; return; }
+        }
+        // Optional columns may carry a unit, e.g. "Long side (μm)"
+        if (OPTIONAL_HEADERS.indexOf(field) !== -1) {
+          for (var j = 0; j < candidates.length; j++) {
+            var at = normalized.findIndex(function (h) { return h.indexOf(candidates[j] + '(') === 0; });
+            if (at !== -1) { map[field] = at; return; }
+          }
         }
       });
       return { headerRow: r, cols: map };
@@ -124,7 +138,7 @@
     var det = detectMasterColumns(rows);
     if (!det) throw new Error('Could not find the "Cell ID" header row in the Master E & L sheet.');
     var c = det.cols;
-    var missingHeaders = Object.keys(MASTER_HEADERS).filter(function (f) { return c[f] === undefined; });
+    var missingHeaders = Object.keys(MASTER_HEADERS).filter(function (f) { return c[f] === undefined && OPTIONAL_HEADERS.indexOf(f) === -1; });
     var sections = detectSections(rows, det.headerRow);
     var sheetSet = {};
     (sheetNames || []).forEach(function (n) { sheetSet[text(n).toUpperCase()] = n; });
@@ -302,7 +316,8 @@
     else if (ntfCol && ['NTF', 'OVER.F'].indexOf(ntfCol.toUpperCase()) === -1) set('sem', ntfCol, 'master');
     else set('sem', '', 'empty');
 
-    MANUAL_ONLY.forEach(function (k) { set(k, '', 'empty'); });
+    // Shape / Location / sizes: copied when the Master sheet has those columns, otherwise typed by hand
+    MANUAL_ONLY.forEach(function (k) { set(k, cell[k] || '', 'master'); });
     return f;
   }
 

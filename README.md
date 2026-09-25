@@ -66,8 +66,8 @@ The page builds the weekly "E81C 양산랏 저전압 현황" deck: 9 A4 slides w
 
 | Input | Example | Used for |
 |---|---|---|
-| OCV tracking workbook (required) | Mass Production E&L Grade OCV Tracking Sheet | Cells, drop analysis from each tracking sheet, EDS, top/back, x/y, layer |
-| Analysis report (recommended) | test1.xlsx or the Analysis tab's *Export Excel* | Location (inside/outside), Shape, reviewed values |
+| OCV Tracking Sheet (required) | Mass Production E&L Grade OCV Tracking Sheet | Cells, drop analysis from each tracking sheet, EDS, top/back, x/y, layer; also Shape, Coating Location, Long side, Short Side, Height when the Master sheet has those columns |
+| Analysis report (optional) | test1.xlsx or the Analysis tab's *Export Excel* | Location (inside/outside), Shape, reviewed values — only needed when the OCV Tracking Sheet lacks those columns. When both are loaded, the report's value wins and the sheet fills the rest |
 | Lot summary (required) | test2.xlsx | Monthly trend, production, E/L rates |
 | Genealogy CSV (optional) | 9.241.csv | AZS stacker / DNC (slide 5) and electrode lots (slides 6–7) |
 

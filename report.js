@@ -16,7 +16,7 @@ const data = {
 // ---------------------------------------------------------------------------
 // Worker (shared with the tracker)
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=9');
+const worker = new Worker('worker.js?v=10');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -87,9 +87,11 @@ async function loadFile(key, file) {
       const buf = await file.arrayBuffer();
       const res = await callWorker({ type: 'source', buf }, [buf]);
       data.ocv = { fileName: file.name, cells: res.cells, lots: res.lots, masterName: res.masterName, layout: res.layout || {} };
+      const located = res.cells.filter((c) => (c.location || '').trim()).length;
       const counted = res.cells.filter(M.isCounted).length;
       const jMissing = M.jMissingCells(res.cells).length;
       setFileStatus(key, `✓ ${escapeHtml(file.name)}<br/>${res.cells.length} cells in "${escapeHtml(res.masterName)}" · ${counted} counted (colored Cell ID + ${escapeHtml(data.ocv.layout.ntfCol || 'J')} filled)` +
+        (located ? `<br/>${located} cells with Coating Location in the sheet (Shape / sizes read too)` : '') +
         (jMissing ? `<br/><b style="color:var(--warn)">⚠ ${jMissing} cell(s) to check — see below</b>` : ''), 'ok');
       fillLotSelects();
       renderCounts();
@@ -209,9 +211,9 @@ function renderCounts() {
 function updateBuildState() {
   const ready = !!(data.ocv && data.stats);
   $('buildBtn').disabled = !ready;
-  const missing = [!data.ocv && 'OCV tracking workbook', !data.stats && 'lot summary'].filter(Boolean);
+  const missing = [!data.ocv && 'OCV Tracking Sheet', !data.stats && 'lot summary'].filter(Boolean);
   $('buildHint').textContent = ready
-    ? (data.review ? '' : 'Tip: without the analysis report, Location (inside/outside) charts stay empty. ') + (data.genealogy ? '' : 'Without the genealogy CSV, slides 5–7 are left blank.')
+    ? (data.review || (data.ocv && data.ocv.cells.some((c) => (c.location || '').trim())) ? '' : 'Tip: neither the OCV Tracking Sheet (Coating Location column) nor an analysis report gives a Location, so inside/outside charts stay empty. ') + (data.genealogy ? '' : 'Without the genealogy CSV, slides 5–7 are left blank.')
     : `Load the ${missing.join(' and ')} first.`;
 }
 
@@ -270,8 +272,8 @@ async function build() {
 function renderSummary(model, fileName) {
   const s = model.report.summary;
   const warn = [];
-  if (!model.counts.reviewed) warn.push('No cell of these lots is in the analysis report, so Location / Shape come out empty.');
-  else if (model.counts.reviewed < model.counts.report) warn.push(`${model.counts.report - model.counts.reviewed} cell(s) are not in the analysis report (Location unknown).`);
+  if (!model.counts.located) warn.push('No cell of these lots has a Location (Coating Location column or analysis report), so Location / Shape come out empty.');
+  else if (model.counts.located < model.counts.report) warn.push(`${model.counts.report - model.counts.located} cell(s) have no Location in the OCV Tracking Sheet or the analysis report.`);
   if (!model.counts.withGenealogy) warn.push('No process history for these cells — slides 5–7 are empty.');
   const jCol = (data.ocv.layout && data.ocv.layout.ntfCol) || 'J';
   if (model.counts.jMissing) warn.push(`${model.counts.jMissing} cell(s) in these lots have an empty ${jCol} column but OCV tracking / tear-down data — not counted (see step 1).`);
