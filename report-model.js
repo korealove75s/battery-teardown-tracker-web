@@ -63,9 +63,12 @@
 
   // Colors follow the legend of the existing report
   const ELEMENT_COLORS = {
-    'Al': 'E7E6E6', 'Al & Mo': 'D9D9D9', 'Cell Missing': '7030A0', 'Cu': 'F4462B', 'Cu & Fe': 'F07C6A', 'Cu & Ni': 'F6A8A0',
-    'Cu & Sn': 'F9CFC9', 'Cu & Zn': 'F48B29', 'Cu & Br': 'C0504D', 'Al & Cu': 'FFB3A7', 'Fe': '2E3FF5', 'Fe & Ni': '5B6EF5',
-    'Fe & Ti': '8FA0F7', 'Fe & Cr': '4A5BD0', 'Ni': '404040', 'Ni & Al': '808080', 'Pin Hole': '1F3864',
+    'Al': 'E7E6E6', 'Al & Mo': 'D9D9D9', 'Cell Missing': '7030A0',
+    // Cu family: Cu red, Cu & Zn orange, the other Cu compounds as a dark-to-light red gradient around Cu
+    'Cu': 'E8261B', 'Cu & Zn': 'F28C28', 'Cu & Fe': '9E1B1B', 'Cu & Br': '5C0A0A', 'Cu & Ni': 'F47C72', 'Al & Cu': 'F7A99F', 'Cu & Sn': 'FAD2CD',
+    // Fe family: Fe royal blue, compounds as clearly different blues (dark navy / sky / pale)
+    'Fe': '2440F0', 'Fe & Ni': '1FA3E0', 'Fe & Cr': '0B1F8A', 'Fe & Ti': '9DC3F5',
+    'Ni': '404040', 'Ni & Al': '808080', 'Pin Hole': '1F3864',
   };
   const EXTRA_COLORS = ['9E480E', '997300', '43682B', '264478', '7F6084', '4BACC6', 'C00000', '00B050'];
   function elementColor(el, i) { return ELEMENT_COLORS[el] || EXTRA_COLORS[(i || 0) % EXTRA_COLORS.length]; }
