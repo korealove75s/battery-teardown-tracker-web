@@ -75,6 +75,10 @@ Which cells are counted: by default only Master E & L rows whose **Cell ID (colu
 Rows with an empty J column but data in "2. OCV Tracking" (R–U) or "3. Tear Down Analysis" (V–Y) are listed in a highlighted box, since they are not counted until J is filled. The rule can be turned off in step 2 (previous behavior: cells with a tracking sheet or an analysis-report row).
 
 Slides: 1 monthly trend with improvement notes, 2 five-analysis results, 3–4 foreign-material locations, 5 coating-top AZS/DNC, 6–7 cathode/anode electrode lots, 8 cumulative results, 9 C4~SOP history (static data from the original deck).
+
+Inside / outside chart on slide 1 (inside = coating inside + Al foil, outside = coating top): lots FD10 ~ FH03 always use the counts from *260714 Low Voltage Total updated* (sheet "260410 FD10~FH03 원본"). Later lots use the analysis report when it has located cells for that lot, otherwise the counts saved from the same workbook (FH04 ~ FH08, FH15 ~ FH19) and *Copy of Copy of Copy of 260714 Low Voltage Total updated* (FH09 ~ FH14). The saved counts are `BASELINE_LOCATION` in `report-model.js`.
+
+Fonts: after the deck is written, every run, chart and the theme is set to Malgun Gothic with the Korean (Hangul) script, so the text does not fall back to another font in other viewers (`fixFonts` in `report-ppt.js`).
 Improvement notes and headline sentences can be edited on the page. The code is in `report-model.js` (numbers) and `report-ppt.js` (layout).
 
 ## Foreign material map (position-map.html)

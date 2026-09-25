@@ -16,7 +16,7 @@ const data = {
 // ---------------------------------------------------------------------------
 // Worker (shared with the tracker)
 // ---------------------------------------------------------------------------
-const worker = new Worker('worker.js?v=6');
+const worker = new Worker('worker.js?v=7');
 let seq = 0;
 const pending = new Map();
 worker.onmessage = (e) => {
@@ -249,7 +249,14 @@ async function build() {
     });
     const pres = P.build(window.PptxGenJS, model);
     const fileName = `${model.fileTitle}.pptx`;
-    await pres.writeFile({ fileName });
+    const blob = await P.write(pres, window.JSZip, 'blob');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     renderSummary(model, fileName);
     showToast(`Downloaded ${fileName}`);
   } catch (err) {

@@ -43,7 +43,7 @@
     const t = text(s);
     if (/foil|al\s*surface/i.test(t)) return 'Al Foil Surface';
     if (/inside|내부/i.test(t)) return 'Coating Inside';
-    if (/top|외부/i.test(t)) return 'Coating Top';
+    if (/top|외부|표면/i.test(t)) return 'Coating Top';
     return '';
   }
   const LOCATIONS = ['Al Foil Surface', 'Coating Inside', 'Coating Top'];
@@ -228,6 +228,42 @@
   // ---------------------------------------------------------------------------
   // Slide 1: monthly trend
   // ---------------------------------------------------------------------------
+  // Inside / outside counts per lot from the earlier analysis files: [inside, outside] voltage-drop cells.
+  // Inside = coating inside + Al foil, outside = coating top. Sources:
+  //   FD10 ~ FH03  "260714 Low Voltage Total updated" sheet "260410 FD10~FH03 원본"
+  //   FH04 ~ FH08, FH15 ~ FH19  same workbook (sheets 260921 FH04~FH08, FH15-FH20)
+  //   FH09 ~ FH14  "Copy of Copy of Copy of 260714 Low Voltage Total updated"
+  // Lots up to BASELINE_FIXED_TO always use these values; later lots use the analysis report when it has them.
+  const BASELINE_FIXED_TO = 'FH03';
+  const BASELINE_LOCATION = {
+    FD10: [14, 18], FD11: [2, 16], FD12: [2, 13], FD13: [2, 5], FD14: [6, 8], FD15: [4, 9], FD16: [3, 8], FD17: [2, 6], FD18: [3, 10], FD19: [2, 6],
+    FD20: [5, 9], FD21: [4, 3], FD22: [0, 4], FD23: [1, 4], FD24: [0, 3], FD27: [2, 1], FD28: [1, 3], FD29: [0, 3], FD30: [0, 3],
+    FE01: [0, 4], FE04: [0, 2], FE05: [1, 1], FE07: [2, 1], FE08: [1, 4], FE11: [1, 1], FE12: [5, 10], FE13: [2, 3], FE14: [1, 4], FE15: [1, 6],
+    FE18: [4, 5], FE19: [1, 8], FE20: [3, 6], FE21: [2, 3], FE22: [3, 10], FE26: [7, 6], FE27: [4, 1], FE28: [3, 7], FE29: [3, 3],
+    FF02: [3, 0], FF03: [1, 1], FF04: [5, 6], FF05: [1, 4], FF06: [3, 4], FF07: [2, 7], FF08: [4, 5], FF09: [1, 2], FF10: [3, 5], FF11: [0, 8],
+    FF12: [2, 6], FF15: [1, 4], FF16: [1, 6], FF17: [0, 2], FF18: [1, 3], FF19: [1, 4], FF21: [2, 2], FF23: [0, 4], FF24: [1, 4], FF25: [1, 5],
+    FF26: [2, 6], FF27: [0, 8], FF29: [2, 7], FF30: [0, 7],
+    FG01: [0, 2], FG06: [1, 9], FG07: [0, 8], FG08: [0, 9], FG09: [2, 6], FG10: [2, 6], FG11: [2, 8], FG12: [0, 9], FG13: [0, 8], FG14: [2, 4],
+    FG15: [0, 4], FG16: [0, 9], FG17: [0, 4], FG18: [1, 6], FG19: [0, 3], FG20: [3, 3], FG21: [1, 11], FG22: [4, 8], FG23: [1, 7], FG24: [0, 3],
+    FG25: [1, 8], FG26: [2, 9], FG27: [5, 7], FG28: [3, 11], FG29: [3, 10], FG30: [0, 6], FG31: [3, 7],
+    FH01: [3, 10], FH02: [1, 6], FH03: [0, 15],
+    FH04: [2, 8], FH05: [0, 10], FH06: [3, 3], FH07: [0, 10], FH08: [2, 14],
+    FH09: [2, 2], FH10: [4, 6], FH11: [0, 8], FH12: [2, 12], FH13: [0, 7], FH14: [0, 13],
+    FH15: [3, 9], FH16: [0, 1], FH17: [0, 6], FH18: [2, 3], FH19: [0, 4],
+  };
+  function isInside(loc) { return loc === 'Coating Inside' || loc === 'Al Foil Surface'; }
+  // { inside, outside } for one lot, or null when nothing is known
+  function lotLocation(lot, locationRecords) {
+    const base = BASELINE_LOCATION[lot];
+    if (base && lotKey(lot) <= BASELINE_FIXED_TO) return { inside: base[0], outside: base[1] };
+    const recs = locationRecords.filter((x) => x.lot === lot && x.voltageDrop === 'Drop' && x.location);
+    if (recs.length) {
+      const inside = recs.filter((x) => isInside(x.location)).length;
+      return { inside, outside: recs.length - inside };
+    }
+    return base ? { inside: base[0], outside: base[1] } : null;
+  }
+
   const MONTH_NAMES = { 4: '4월', 5: '5월', 6: '6월', 7: '7월', 8: '8월', 9: '9월', 10: '10월', 11: '11월', 12: '12월', 1: '1월', 2: '2월', 3: '3월' };
   function monthlyTrend(stats, fromLot, toLot, locationRecords) {
     const lots = stats.filter((r) => inRange(r.lot, fromLot, toLot));
@@ -243,17 +279,15 @@
       const prod = mo.lots.reduce((s, r) => s + r.production, 0);
       const e = mo.lots.reduce((s, r) => s + r.eCount, 0);
       const l = mo.lots.reduce((s, r) => s + r.lCount, 0);
-      const lotSet = new Set(mo.lots.map((r) => r.lot));
-      const recs = locationRecords.filter((r) => lotSet.has(r.lot) && r.voltageDrop === 'Drop' && r.location);
-      const inside = recs.filter((r) => r.location === 'Coating Inside').length;
-      const outside = recs.filter((r) => r.location !== 'Coating Inside').length;
+      const locs = mo.lots.map((r) => lotLocation(r.lot, locationRecords)).filter(Boolean);
+      const inside = locs.reduce((s, x) => s + x.inside, 0);
+      const outside = locs.reduce((s, x) => s + x.outside, 0);
       Object.assign(mo, { production: prod, eCount: e, lCount: l, eRate: prod ? e / prod * 100 : 0, lRate: prod ? l / prod * 100 : 0, totalRate: prod ? (e + l) / prod * 100 : 0, inside, outside, located: inside + outside });
     });
-    // Share of coating-inside foreign material per lot (only lots with located cells)
+    // Share of inside foreign material per lot (null for lots without located cells)
     const insideShare = lots.map((r) => {
-      const recs = locationRecords.filter((x) => x.lot === r.lot && x.voltageDrop === 'Drop' && x.location);
-      if (!recs.length) return null;
-      return recs.filter((x) => x.location === 'Coating Inside').length / recs.length * 100;
+      const x = lotLocation(r.lot, locationRecords);
+      return x && x.inside + x.outside ? x.inside / (x.inside + x.outside) * 100 : null;
     });
     return {
       lots: lots.map((r) => r.lot),
@@ -463,7 +497,7 @@
     normElement, elementGroup, normLocation, normTopBack, normDrop, GROUPS, LOCATIONS,
     ELEMENT_COLORS, elementColor, LOCATION_COLORS, TOPBACK_COLORS,
     parseLotStats, sumLots, createGenealogyParser, makeRecord, analysisSummary, lotElementPanels,
-    monthlyTrend, trendHeadline, stackerTables, outsideEquipment, electrodeAnalysis, analysisHeadline, countBy, pct, isoWeek,
+    monthlyTrend, trendHeadline, lotLocation, BASELINE_LOCATION, BASELINE_FIXED_TO, stackerTables, outsideEquipment, electrodeAnalysis, analysisHeadline, countBy, pct, isoWeek,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LvReportModel = api;
