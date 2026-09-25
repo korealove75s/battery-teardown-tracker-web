@@ -271,6 +271,7 @@ th.col-sticky-1, th.col-sticky-2 { z-index: 8; }
   border-bottom: 1px solid var(--border);
 }
 .migrate-banner[hidden] { display: none; }
+#resetBtn[hidden] { display: none; }
 .migrate-banner span { flex: 1; min-width: 220px; }
 
 /* OCV workbook import + input highlights (Frozen IR · Spot Analysis tab) */

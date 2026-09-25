@@ -330,6 +330,7 @@ async function initStorage() {
     }
     document.getElementById('appSubtitle').textContent = 'Battery cell teardown analysis log · Shared database (any device)';
     firebase.auth().onAuthStateChanged((user) => {
+      document.getElementById('resetBtn').hidden = !isAdmin(user);
       if (user) {
         hideLogin();
         document.getElementById('signOutBtn').hidden = false;
@@ -372,6 +373,7 @@ async function initStorage() {
     showEmpty(true, 'This browser does not support local storage (IndexedDB) or it is disabled. Open the page in a normal (non-private) window.');
     return;
   }
+  document.getElementById('resetBtn').hidden = false;
   document.getElementById('appSubtitle').textContent = 'Battery cell teardown analysis log · Saved in this browser only (shared database not configured)';
   await LocalBackend.subscribe(onSheetData);
   setLiveBadge('live', 'Saved in this browser');
@@ -483,9 +485,17 @@ async function uploadLocalData() {
 }
 
 // ---------------------------------------------------------------------------
-// Reset
+// Reset (shared database: admin account only)
 // ---------------------------------------------------------------------------
+function isAdmin(user) {
+  const admin = String(window.BTT_ADMIN_EMAIL || '').trim().toLowerCase();
+  return !!(user && user.email && admin && user.email.toLowerCase() === admin);
+}
+function canReset() {
+  return backend.mode !== 'cloud' || isAdmin(firebase.auth().currentUser);
+}
 function openResetModal() {
+  if (!canReset()) { showToast('Only the administrator can reset data.', true); return; }
   document.getElementById('resetCurrentLabel').textContent = `Current tab only (${SHEET.label}${SHEET.hasImages ? ', including attached images' : ''})`;
   document.getElementById('resetScopeNote').textContent = backend.mode === 'cloud'
     ? 'This deletes the data in the shared database for everyone on the team.'
@@ -499,6 +509,7 @@ function openResetModal() {
 }
 async function confirmReset() {
   if (document.getElementById('resetConfirmInput').value.trim() !== 'RESET') return;
+  if (!canReset()) { showToast('Only the administrator can reset data.', true); return; }
   const scope = document.querySelector('input[name="resetScope"]:checked').value;
   const keys = scope === 'all' ? Object.keys(SHEETS) : [activeSheetKey];
   const btn = document.getElementById('resetConfirmBtn');

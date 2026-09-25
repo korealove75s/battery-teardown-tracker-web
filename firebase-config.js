@@ -10,6 +10,6 @@ window.BTT_FIREBASE_CONFIG = {
   appId: '1:969722345286:web:404d69162340cb28a95747',
 };
 
-// The single account allowed to use the shared database (Firebase Authentication > Users).
-// Its password is the password typed on the sign-in screen.
-window.BTT_TEAM_EMAIL = 'korealove75s@gmail.com';
+// Users sign in with their own ID (email) and password (Firebase Authentication > Users).
+// Only this account sees the Reset button that deletes shared data.
+window.BTT_ADMIN_EMAIL = 'korealove75s@gmail.com';
